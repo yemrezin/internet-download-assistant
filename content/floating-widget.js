@@ -252,12 +252,15 @@ window.__IDA_FLOATING__ = (function () {
         return;
       }
 
+      const isHls = effectiveUrl.includes('.m3u8') || effectiveUrl.includes('/hls/') || effectiveUrl.includes('/master.') || effectiveUrl.includes('master.txt');
+
       chrome.runtime.sendMessage(
         {
           type: 'DOWNLOAD_MEDIA',
           url: effectiveUrl,
           title: docTitle,
-          format: effectiveUrl.includes('.m3u8') ? 'M3U8' : 'MP4'
+          pageUrl: window.location.href,
+          format: isHls ? 'M3U8' : 'MP4'
         },
         (res) => {
           if (res && res.success) {

@@ -131,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             type: 'DOWNLOAD_MEDIA',
             url: item.url,
             title: item.title,
+            pageUrl: item.pageUrl || (currentTab ? currentTab.url : ''),
             format: item.format
           });
 
@@ -233,6 +234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         type: 'DOWNLOAD_MEDIA',
         url: item.url,
         title: item.title,
+        pageUrl: item.pageUrl || (currentTab ? currentTab.url : ''),
         format: item.format
       });
       // Small pause between multiple downloads to avoid browser throttle

@@ -50,8 +50,8 @@ function detectFormat(url, mime = '') {
   if (mime.includes('subrip') || urlPath.endsWith('.srt')) return 'SRT';
   if (mime.includes('ttml') || urlPath.endsWith('.ttml') || urlPath.endsWith('.dfxp')) return 'TTML';
   if (url.includes('/timedtext')) return 'VTT';
-  if (mime.includes('mpegurl') || urlPath.endsWith('.m3u8') || url.includes('.m3u8')) return 'M3U8';
-  if (mime.includes('dash+xml') || urlPath.endsWith('.mpd')) return 'MPD';
+  if (mime.includes('mpegurl') || urlPath.endsWith('.m3u8') || url.includes('.m3u8') || url.includes('/hls/') || url.includes('/master.') || url.includes('/playlist.')) return 'M3U8';
+  if (mime.includes('dash+xml') || urlPath.endsWith('.mpd') || url.includes('/dash/')) return 'MPD';
   if (mime.includes('mp4') || urlPath.endsWith('.mp4') || urlPath.endsWith('.m4v')) return 'MP4';
   if (mime.includes('webm') || urlPath.endsWith('.webm')) return 'WEBM';
   if (mime.includes('x-matroska') || urlPath.endsWith('.mkv')) return 'MKV';
@@ -155,6 +155,15 @@ async function registerMedia(tabId, item) {
         item.title = 'Web Medyası';
       }
     }
+  }
+
+  if (!item.pageUrl && tabId) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab && tab.url) {
+        item.pageUrl = tab.url;
+      }
+    } catch {}
   }
 
   if (isSubtitle && !item.title.toLowerCase().includes('altyazı') && !item.title.toLowerCase().includes('subtitle')) {
@@ -286,33 +295,90 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         // Trigger file download
         case 'DOWNLOAD_MEDIA': {
-          const { url, title, format } = message;
+          let { url, title, format, pageUrl } = message;
           if (!url) {
             sendResponse({ success: false, error: 'URL boş olamaz' });
             return;
           }
 
-          // If M3U8 stream, route to built-in HLS Downloader tab
-          if (format === 'M3U8' || url.includes('.m3u8')) {
+          // Fallback pageUrl from tab if not provided
+          if (!pageUrl && tabId) {
+            try {
+              const tab = await chrome.tabs.get(tabId);
+              if (tab && tab.url) pageUrl = tab.url;
+            } catch {}
+          }
+
+          // Check if this is an HLS / M3U8 stream
+          const isHls = format === 'M3U8' ||
+            url.includes('.m3u8') ||
+            url.includes('/hls/') ||
+            url.includes('/master.') ||
+            url.includes('/playlist.') ||
+            url.includes('master.txt');
+
+          if (isHls) {
             const hlsUrl = chrome.runtime.getURL(
-              `hls-downloader/downloader.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title || 'video')}`
+              `hls-downloader/downloader.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title || 'video')}&referer=${encodeURIComponent(pageUrl || '')}`
             );
             await chrome.tabs.create({ url: hlsUrl });
             sendResponse({ success: true, openedDownloader: true });
             return;
           }
 
+          // For direct file downloads, apply DeclarativeNetRequest rule to inject Referer & Origin headers
+          if (pageUrl && chrome.declarativeNetRequest) {
+            try {
+              const u = new URL(url);
+              const pOrigin = new URL(pageUrl).origin;
+              await chrome.declarativeNetRequest.updateDynamicRules({
+                removeRuleIds: [8888],
+                addRules: [
+                  {
+                    id: 8888,
+                    priority: 2,
+                    action: {
+                      type: 'modifyHeaders',
+                      requestHeaders: [
+                        { header: 'Referer', operation: 'set', value: pageUrl },
+                        { header: 'Origin', operation: 'set', value: pOrigin }
+                      ]
+                    },
+                    condition: {
+                      urlFilter: u.hostname,
+                      resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest', 'media', 'other']
+                    }
+                  }
+                ]
+              });
+            } catch (err) {
+              console.warn('DNR rule setup error:', err);
+            }
+          }
+
           // Direct file download using Chrome Downloads API
           const ext = (format || 'mp4').toLowerCase();
           const cleanName = sanitizeFilename(title, ext);
 
+          const downloadOptions = {
+            url: url,
+            filename: cleanName,
+            saveAs: false,
+            conflictAction: 'uniquify'
+          };
+
+          // Also inject headers directly into download request
+          if (pageUrl) {
+            downloadOptions.headers = [
+              { name: 'Referer', value: pageUrl }
+            ];
+            try {
+              downloadOptions.headers.push({ name: 'Origin', value: new URL(pageUrl).origin });
+            } catch {}
+          }
+
           chrome.downloads.download(
-            {
-              url: url,
-              filename: cleanName,
-              saveAs: false,
-              conflictAction: 'uniquify'
-            },
+            downloadOptions,
             (downloadId) => {
               if (chrome.runtime.lastError) {
                 console.warn('Download error:', chrome.runtime.lastError);
