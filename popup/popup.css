@@ -7,9 +7,6 @@
   --bg-card-hover: #26354a;
   --accent-cyan: #0284c7;
   --accent-blue: #0369a1;
-  --accent-emerald: #10b981;
-  --accent-amber: #f59e0b;
-  --accent-purple: #8b5cf6;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --border-color: rgba(255, 255, 255, 0.08);
@@ -126,8 +123,8 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent-emerald);
-  box-shadow: 0 0 8px var(--accent-emerald);
+  background: var(--accent-cyan);
+  box-shadow: 0 0 6px rgba(2, 132, 199, 0.6);
   flex-shrink: 0;
 }
 
@@ -316,41 +313,26 @@ body {
 
 .badge {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   padding: 2px 7px;
   border-radius: 4px;
   letter-spacing: 0.3px;
   text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .badge-format {
-  background: rgba(2, 132, 199, 0.2);
+  background: rgba(2, 132, 199, 0.15);
   color: #38bdf8;
-  border: 1px solid rgba(2, 132, 199, 0.4);
-}
-
-.badge-format.m3u8 {
-  background: rgba(139, 92, 246, 0.2);
-  color: #c084fc;
-  border-color: rgba(139, 92, 246, 0.4);
-}
-
-.badge-format.subtitle, .badge-quality.subtitle {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-}
-
-.badge-format.audio, .badge-quality.audio {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  border: 1px solid rgba(2, 132, 199, 0.3);
 }
 
 .badge-quality {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .card-size {
@@ -388,7 +370,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: linear-gradient(135deg, #0284c7, #0369a1);
+  background: #0284c7;
   color: #ffffff;
   border: none;
   padding: 7px 12px;
@@ -397,12 +379,10 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
 }
 
 .btn-download:hover {
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.45);
+  background: #0369a1;
 }
 
 .btn-download:active {
@@ -410,18 +390,17 @@ body {
 }
 
 .btn-download.btn-download--active {
-  background: linear-gradient(135deg, #0284c7, #0891b2);
+  background: #0284c7;
   cursor: wait;
   opacity: 0.95;
 }
 
 .btn-download.btn-download--success {
-  background: linear-gradient(135deg, #10b981, #059669);
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  background: #0ea5e9;
 }
 
 .btn-download.btn-download--error {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: #ef4444;
 }
 
 .btn-download svg {
@@ -435,7 +414,7 @@ body {
 .card-progress-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   margin-top: 4px;
   animation: fadeIn 0.2s ease-in;
 }
@@ -451,7 +430,7 @@ body {
 .card-progress-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #38bdf8, #34d399);
+  background: #0284c7;
   border-radius: 3px;
   transition: width 0.2s ease;
 }
@@ -462,6 +441,34 @@ body {
   color: #94a3b8;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-progress-status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-cancel-task {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.btn-cancel-task:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
 }
 
 .card-icon-actions {

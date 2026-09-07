@@ -87,6 +87,10 @@ class OffscreenDownloadController {
 
   handleCancel(taskId) {
     if (this.activeEngines.has(taskId)) {
+      const engine = this.activeEngines.get(taskId);
+      if (engine && engine.abort) {
+        engine.abort();
+      }
       this.activeEngines.delete(taskId);
       chrome.runtime
         .sendMessage({

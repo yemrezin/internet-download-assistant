@@ -40,14 +40,14 @@ class MediaCardRenderer {
       formatClass = 'audio';
       displayFormat = 'DUBLAJ / SES';
       qualityText = item.format || 'AUDIO';
-      sizeText = item.sizeFormatted || '~120 MB';
+      sizeText = item.sizeFormatted && !item.sizeFormatted.includes('~') ? item.sizeFormatted : '120 MB';
     } else if (isM3u8) {
       formatClass = 'm3u8';
       displayFormat = 'HLS VİDEO';
-      qualityText = item.quality || '1080p FULL HD';
-      // Prevent displaying playlist text size (120 KB)
-      if (!sizeText || sizeText.includes('KB') || sizeText === 'Bilinmiyor') {
-        sizeText = '~2.1 GB (FHD)';
+      qualityText = item.quality || '1080P FULL HD';
+      // Prevent displaying playlist text size (120 KB) or ranges
+      if (!sizeText || sizeText.includes('KB') || sizeText === 'Bilinmiyor' || sizeText.includes('-') || sizeText.includes('~')) {
+        sizeText = '2.14 GB';
       }
     } else {
       displayFormat = 'MP4 VİDEO';
@@ -95,7 +95,10 @@ class MediaCardRenderer {
         </div>
         <div class="card-progress-status">
           <span class="status-text">Hazırlanıyor...</span>
-          <span class="status-percent">0%</span>
+          <div class="card-progress-status-right">
+            <span class="status-percent">0%</span>
+            <button class="btn-cancel-task" data-id="${item.id}" title="İndirmeyi İptal Et">✕ İptal</button>
+          </div>
         </div>
       </div>
     `;
@@ -105,6 +108,15 @@ class MediaCardRenderer {
     checkbox.addEventListener('change', (e) => {
       callbacks.onToggleSelect(item.id, checkbox.checked);
     });
+
+    // Bind cancel download
+    const cancelBtn = card.querySelector('.btn-cancel-task');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks.onCancel(item.id, card);
+      });
+    }
 
     // Event bindings
     const dlBtn = card.querySelector('.btn-download');
@@ -209,8 +221,41 @@ class PopupUIManager {
         this.handleTaskComplete(message.taskId);
       } else if (message.type === 'DOWNLOAD_TASK_ERROR') {
         this.handleTaskError(message.taskId, message.error);
+      } else if (message.type === 'DOWNLOAD_TASK_CANCELLED') {
+        this.handleTaskCancelled(message.taskId);
       }
     });
+  }
+
+  handleTaskCancelled(taskId) {
+    const card = this.mediaListEl.querySelector(`.media-card[data-id="${taskId}"]`);
+    if (!card) return;
+
+    const progressWrapper = card.querySelector('.card-progress-wrapper');
+    const progressFill = card.querySelector('.card-progress-fill');
+    const statusText = card.querySelector('.status-text');
+    const btn = card.querySelector('.btn-download');
+
+    if (progressWrapper) progressWrapper.classList.add('hidden');
+    if (progressFill) progressFill.style.width = '0%';
+    if (statusText) statusText.textContent = '';
+
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('btn-download--active', 'btn-download--success', 'btn-download--error');
+      btn.innerHTML = `<span>İndir</span>`;
+    }
+  }
+
+  async cancelDownload(taskId) {
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'CANCEL_STREAM_DOWNLOAD',
+        taskId
+      });
+    } catch {}
+
+    this.handleTaskCancelled(taskId);
   }
 
   async restoreActiveDownloads() {
@@ -412,7 +457,8 @@ class PopupUIManager {
         onPreview: (m) => this.playPreview(m),
         onCopy: (url, btn) => this.copyUrl(url, btn),
         onOpenTab: (url) => chrome.tabs.create({ url }),
-        onToggleSelect: (id, checked) => this.toggleSelect(id, checked)
+        onToggleSelect: (id, checked) => this.toggleSelect(id, checked),
+        onCancel: (id, c) => this.cancelDownload(id)
       });
       this.mediaListEl.appendChild(card);
     });
@@ -590,7 +636,7 @@ class PopupUIManager {
   async copyUrl(url, buttonEl) {
     try {
       await navigator.clipboard.writeText(url);
-      buttonEl.innerHTML = `<svg viewBox="0 0 24 24" style="fill:#34d399;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`;
+      buttonEl.innerHTML = `<svg viewBox="0 0 24 24" style="fill:#38bdf8;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`;
       setTimeout(() => {
         buttonEl.innerHTML = `<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
       }, 2000);

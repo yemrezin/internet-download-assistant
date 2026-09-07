@@ -7,6 +7,11 @@ class StreamDownloadEngine {
   constructor(concurrency = 6) {
     this.concurrency = concurrency;
     this.activeDownloads = new Map();
+    this.isAborted = false;
+  }
+
+  abort() {
+    this.isAborted = true;
   }
 
   static resolveUrl(relative, base) {
@@ -120,21 +125,21 @@ class StreamDownloadEngine {
    * @returns {Promise<Blob>}
    */
   async fetchSegments(segments, onProgress) {
+    this.isAborted = false;
     const downloadedChunks = new Array(segments.length);
     let completedCount = 0;
     let totalBytes = 0;
     let nextIndex = 0;
-    let isAborted = false;
 
     const worker = async () => {
-      while (nextIndex < segments.length && !isAborted) {
+      while (nextIndex < segments.length && !this.isAborted) {
         const index = nextIndex++;
         const segUrl = segments[index];
 
         let attempt = 0;
         let success = false;
 
-        while (attempt < 3 && !success && !isAborted) {
+        while (attempt < 3 && !success && !this.isAborted) {
           attempt++;
           try {
             const res = await fetch(segUrl);
@@ -145,7 +150,7 @@ class StreamDownloadEngine {
             completedCount++;
             success = true;
 
-            if (onProgress) {
+            if (onProgress && !this.isAborted) {
               const percent = Math.min(95, 10 + Math.round((completedCount / segments.length) * 85));
               onProgress({
                 percent,
@@ -156,6 +161,7 @@ class StreamDownloadEngine {
               });
             }
           } catch {
+            if (this.isAborted) return;
             if (attempt >= 3) {
               completedCount++;
             } else {
@@ -173,6 +179,10 @@ class StreamDownloadEngine {
     }
 
     await Promise.all(workers);
+
+    if (this.isAborted) {
+      throw new Error('İndirme kullanıcı tarafından iptal edildi.');
+    }
 
     const validChunks = downloadedChunks.filter(Boolean);
     if (validChunks.length === 0) {

@@ -107,6 +107,34 @@ class ServiceWorkerController {
               break;
             }
 
+            case 'CANCEL_STREAM_DOWNLOAD': {
+              const taskId = message.taskId;
+              this.activeDownloadTasks.delete(taskId);
+
+              chrome.runtime
+                .sendMessage({
+                  target: 'offscreen',
+                  type: 'CANCEL_STREAM_DOWNLOAD',
+                  taskId
+                })
+                .catch(() => {});
+
+              if (this.activeDownloadTasks.size === 0) {
+                chrome.action.setBadgeText({ text: '' });
+              }
+
+              sendResponse({ success: true, taskId });
+              break;
+            }
+
+            case 'DOWNLOAD_TASK_CANCELLED': {
+              this.activeDownloadTasks.delete(message.taskId);
+              if (this.activeDownloadTasks.size === 0) {
+                chrome.action.setBadgeText({ text: '' });
+              }
+              break;
+            }
+
             case 'DOWNLOAD_TASK_PROGRESS': {
               const task = this.activeDownloadTasks.get(message.taskId) || { id: message.taskId, item: {} };
               task.percent = message.percent || 0;

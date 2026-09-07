@@ -166,7 +166,7 @@ export class MediaClassifier {
   }
 
   /**
-   * Estimates total HLS video size based on bandwidth and duration
+   * Estimates total HLS video size based on bandwidth and duration as a concrete single number
    * @param {number} bandwidthBps - Bandwidth in bits per second
    * @param {number} durationSeconds - Duration in seconds
    * @param {string} quality - Quality label (e.g. 1080p, 720p)
@@ -176,7 +176,7 @@ export class MediaClassifier {
     // If exact duration and bandwidth are available, calculate exact estimation
     if (bandwidthBps > 0 && durationSeconds > 0) {
       const totalBytes = Math.round((bandwidthBps / 8) * durationSeconds);
-      return `~${MediaClassifier.formatBytes(totalBytes)}`;
+      return MediaClassifier.formatBytes(totalBytes);
     }
 
     // If duration is available (e.g. 1h 45m = 6300s):
@@ -186,14 +186,14 @@ export class MediaClassifier {
       else if (quality.includes('480')) bps = 900000;
       else if (quality.includes('4K') || quality.includes('2160')) bps = 8000000;
       const totalBytes = Math.round((bps / 8) * durationSeconds);
-      return `~${MediaClassifier.formatBytes(totalBytes)}`;
+      return MediaClassifier.formatBytes(totalBytes);
     }
 
-    // Realistic fallback for movie/stream
-    if (quality.includes('720')) return '~1.1 - 1.4 GB';
-    if (quality.includes('480')) return '~600 - 800 MB';
-    if (quality.includes('4K')) return '~5.5 - 8.0 GB';
-    return '~1.8 - 2.4 GB (Full HD)';
+    // Concrete single size based on quality (no interval/range)
+    if (quality.includes('720')) return '1.24 GB';
+    if (quality.includes('480')) return '680 MB';
+    if (quality.includes('4K') || quality.includes('2160')) return '6.40 GB';
+    return '2.14 GB';
   }
 
   /**
