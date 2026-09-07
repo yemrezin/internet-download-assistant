@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HLS / M3U8 Video Akış İndiricisi - IDM Asistanı</title>
+  <link rel="stylesheet" href="downloader.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo-area">
+        <img src="../icons/icon-48.png" alt="IDM Logo" class="logo">
+        <div>
+          <h1>HLS / M3U8 Akış İndirici</h1>
+          <p class="subtitle">Parçalı video yayınlarını tek bir video dosyasında birleştirip indirin</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Media Details Card -->
+      <div class="card media-info-card">
+        <div class="info-row">
+          <span class="label">Video Başlığı:</span>
+          <input type="text" id="inputTitle" class="input-title" placeholder="Video İsmi">
+        </div>
+        <div class="info-row">
+          <span class="label">Akış Adresi (M3U8):</span>
+          <div class="url-input-group">
+            <input type="text" id="inputUrl" class="input-url" readonly>
+            <button id="btnCopyUrl" class="btn-secondary" title="URL'yi Kopyala">Kopyala</button>
+          </div>
+        </div>
+        <div id="qualitySelectorGroup" class="info-row hidden">
+          <span class="label">Video Kalite Seçimi:</span>
+          <select id="selStreamQuality" class="select-quality"></select>
+        </div>
+        <div id="audioSelectorGroup" class="info-row hidden">
+          <span class="label">Dublaj / Ses Dili:</span>
+          <div class="url-input-group">
+            <select id="selAudioTrack" class="select-quality"></select>
+            <button id="btnDownloadAudioOnly" class="btn-secondary" title="Sadece Ses Dosyasını İndir">Sesi İndir</button>
+          </div>
+        </div>
+        <div id="subtitleSelectorGroup" class="info-row hidden">
+          <span class="label">Altyazı Seçimi:</span>
+          <div class="url-input-group">
+            <select id="selSubtitleTrack" class="select-quality"></select>
+            <button id="btnDownloadSubOnly" class="btn-secondary" title="Seçilen Altyazıyı İndir">Altyazıyı İndir</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Panel -->
+      <div class="card action-card">
+        <div class="btn-group">
+          <button id="btnStartDownload" class="btn-primary">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            Parçaları İndir ve Birleştir
+          </button>
+          <button id="btnCopyFFmpeg" class="btn-secondary" title="FFmpeg Komutunu Kopyala">
+            FFmpeg Komutunu Kopyala
+          </button>
+        </div>
+
+        <!-- Progress Area -->
+        <div id="progressArea" class="progress-area hidden">
+          <div class="progress-bar-bg">
+            <div id="progressBar" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <div class="progress-details">
+            <span id="progressText">Hazırlanıyor...</span>
+            <span id="progressPercent">0%</span>
+          </div>
+          <div class="progress-stats">
+            <span id="statSegments">0 / 0 parça</span>
+            <span id="statSize">0 MB indirildi</span>
+          </div>
+        </div>
+
+        <!-- Success Result -->
+        <div id="successArea" class="success-area hidden">
+          <div class="success-icon">✓</div>
+          <h3>Video Başarıyla Birleştirildi!</h3>
+          <p>İndirme tarayıcınız tarafından başlatıldı. Dosyayı doğrudan bilgisayarınıza kaydedebilirsiniz.</p>
+          <a id="btnSaveDirect" class="btn-download-result hidden" download="video.ts">Tekrar İndir</a>
+        </div>
+
+        <!-- Log Box -->
+        <div class="log-container">
+          <div class="log-header">
+            <span>İşlem Günlüğü</span>
+            <button id="btnClearLog" class="btn-text">Temizle</button>
+          </div>
+          <div id="logBox" class="log-box"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="downloader.js"></script>
+</body>
+</html>

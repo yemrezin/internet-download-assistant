@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ayarlar - Internet Video Download Assistant</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="settings-container">
+    <header class="settings-header">
+      <div class="brand">
+        <img src="../icons/icon-48.png" alt="Logo" class="logo">
+        <div>
+          <h1>Internet Video Download Assistant</h1>
+          <p class="subtitle">Eklenti ve İndirme Tercihleri (IDM Tarzı)</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="settings-body">
+      <!-- Section 1: IDM Floating Button -->
+      <section class="settings-card">
+        <h2>IDM Yüzen Buton (Floating Widget)</h2>
+        <p class="card-desc">Web sayfalarında oynatılan videoların hemen sağ üst köşesinde "Videoyu İndir" butonunun görünmesi.</p>
+
+        <div class="form-group-toggle">
+          <label class="switch">
+            <input type="checkbox" id="chkFloatingBtn" checked>
+            <span class="slider"></span>
+          </label>
+          <div class="toggle-text">
+            <strong>Videolar üzerinde indirme butonunu göster</strong>
+            <span>Fare ile videonun üzerine geldiğinizde indirme kısayolunu gösterir.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Filtering -->
+      <section class="settings-card">
+        <h2>Medya Filtreleme</h2>
+        <p class="card-desc">Küçük reklam seslerini veya arayüz ses efektlerini filtreleyerek sadece gerçek videoları yakalayın.</p>
+
+        <div class="form-group">
+          <label for="selMinSize">Minimum Dosya Boyutu:</label>
+          <select id="selMinSize" class="form-control">
+            <option value="0">Tümünü Yakala (Filtre Yok)</option>
+            <option value="153600">150 KB (Önerilen)</option>
+            <option value="512000">500 KB</option>
+            <option value="1048576">1 MB</option>
+            <option value="5242880">5 MB</option>
+          </select>
+          <span class="form-hint">M3U8 ve MPD akış bildirimleri bu boyuttan etkilenmez, her zaman yakalanır.</span>
+        </div>
+      </section>
+
+      <!-- Section 3: Filename Formatting -->
+      <section class="settings-card">
+        <h2>Dosya İsimlendirme Şablonu</h2>
+        <p class="card-desc">İndirilen videoların bilgisayarınıza hangi formatta kaydedileceği.</p>
+
+        <div class="form-group">
+          <label for="selNamingPattern">İsimlendirme Formatı:</label>
+          <select id="selNamingPattern" class="form-control">
+            <option value="title">{Sayfa Başlığı}</option>
+            <option value="title_quality">{Sayfa Başlığı} - {Kalite}</option>
+            <option value="title_date">{Sayfa Başlığı} - {Tarih}</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Section 4: Browser Compatibility Info -->
+      <section class="settings-card info-card">
+        <h2>Tarayıcı Uyumluluğu</h2>
+        <div class="browsers-grid">
+          <div class="browser-badge">
+            <span class="browser-status">✓ Tam Uyumlu</span>
+            <strong>Google Chrome</strong>
+          </div>
+          <div class="browser-badge">
+            <span class="browser-status">✓ Tam Uyumlu</span>
+            <strong>Microsoft Edge</strong>
+          </div>
+          <div class="browser-badge">
+            <span class="browser-status">✓ Tam Uyumlu</span>
+            <strong>Brave Browser</strong>
+          </div>
+          <div class="browser-badge">
+            <span class="browser-status">✓ Tam Uyumlu</span>
+            <strong>Opera / Vivaldi</strong>
+          </div>
+        </div>
+      </section>
+
+      <div class="settings-footer">
+        <button id="btnSave" class="btn-primary">Ayarları Kaydet</button>
+        <span id="saveStatus" class="save-status hidden">✓ Ayarlar başarıyla kaydedildi</span>
+      </div>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
