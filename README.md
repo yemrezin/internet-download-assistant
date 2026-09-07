@@ -1,22 +1,34 @@
-# Internet Video Download Assistant (IDM Tarzı Tarayıcı Video İndiricisi)
+# Internet Video Download Assistant v2.0 (IDM Tarzı Tarayıcı Video İndiricisi)
 
-**Internet Video Download Assistant**, web sayfalarında izlediğiniz videoları **Internet Download Manager (IDM)** benzeri bir deneyimle otomatik olarak tespit eden ve tek tıkla indirmenizi sağlayan modern bir **Manifest V3** tarayıcı eklentisidir.
+**Internet Video Download Assistant**, web sayfalarında izlediğiniz videoları **Internet Download Manager (IDM)** benzeri bir deneyimle otomatik olarak tespit eden ve tek tıkla indirmenizi sağlayan modern ve kurumsal bir **Manifest V3** tarayıcı eklentisidir.
 
-Google Chrome, Microsoft Edge, Brave, Opera ve Vivaldi dahil olmak üzere tüm **Chromium tabanlı tarayıcılarda** eksiksiz ve sıfır ek yazılım gereksinimiyle çalışır.
+Google Chrome, Microsoft Edge, Brave, Opera ve Vivaldi dahil olmak üzere tüm **Chromium tabanlı tarayıcılarda** eksiksiz, kesintisiz ve sıfır ek yazılım gereksinimiyle çalışır.
 
 ---
 
-## 🚀 Öne Çıkan Özellikler
+## 🚀 Sürüm 2.0 ile Gelen Yenilikler
 
-- **🎥 IDM Tarzı Yüzen İndirme Butonu:** Sayfada herhangi bir video oynatıldığında veya farenizi videonun üzerine getirdiğinizde, videonun sağ üst köşesinde zarif bir *"Videoyu İndir"* düğmesi belirir.
+- **🏗️ SOLID Prensiplerine Dayalı Kurumsal Mimari:** Modüler servis tasarımı (`MediaClassifier`, `MediaSnifferService`, `DownloadService`, `HeaderRuleService`, `StorageService`).
+- **🔄 Arka Planda Kesintisiz İndirme (Offscreen Engine):** İndirmeyi başlattıktan sonra popup kapatılsa, sekme değiştirilse veya başka sitelere gidilse dahi indirme işlemi arka planda kesintisiz devam eder. Eklenti rozetinde (badge) canlı yüzde gösterilir.
+- **✕ İndirmeyi İptal Etme Seçeneği:** Devam eden indirmeleri dilediğiniz an tek tıkla iptal etme ve temizleme desteği.
+- **📊 Net ve Kesin Boyut Gösterimi:** Aralıklar (`~1.8 - 2.4 GB`) tamamen kaldırıldı; videoların ve altyazıların kesin ve tekil boyutları gösterilir.
+- **🎨 Sade ve Minimalist Koyu Monokrom Arayüz:** Göz yoran mor, yeşil ve turuncu renkler kaldırılarak profesyonel koyu tema uygulandı.
+- **🛡️ Güvenli ve Kapsamlı Ağ Koruma Kalkanı:** YouTube, Google, Netflix gibi servislerin bağlantısını koruyan, yalnızca hedef CDN alan adlarına özel çalışan akıllı Declarative Net Request (DNR) motoru.
+- **⚡ Anında Tarayıcı İndirmesi:** Altyazılar (`.vtt`, `.srt`) ve doğrudan MP4 medyaları bekleme olmadan anında tarayıcının yerel indirme yöneticisine iletilir.
+
+---
+
+## 📌 Öne Çıkan Özellikler
+
+- **🎥 IDM Tarzı Yüzen İndirme Butonu:** Sayfada herhangi bir video oynatıldığında videonun sağ üst köşesinde zarif bir *"Videoyu İndir"* düğmesi belirir.
 - **⚡ Çift Yönlü Medya Tespiti (Dual Sniffing):**
   - **Ağ Trafiği (Network Sniffer):** Arka planda yüklenen MP4, WebM, M3U8, TS ve ses akışlarını anında yakalar.
-  - **Sayfa İçi Oynatıcılar (DOM Scanner):** HTML5 video/audio ve iframe içindeki medya etiketlerini analiz ederek çözünürlük (4K, 1080p, 720p vb.), süre ve poster resimlerini çıkarır.
-- **📦 HLS / M3U8 Parçalı Akış İndiricisi:** Modern yayın sitelerinde kullanılan parçalı `.m3u8` akışlarını tarayıcı içinde sırayla indirip birleştiren yerleşik akış indirici konsolu (`downloader.html`).
-- **🎬 Mini Önizleme Oynatıcısı:** Videoyu indirmeden önce doğru video olduğundan emin olmak için açılır pencere içinde anında önizleme izleme imkanı.
-- **📋 Tek Tıkla Bağlantı ve FFmpeg Kopyalama:** Doğrudan video URL'sini veya harici terminalde indirmek isteyenler için tek tıkla FFmpeg komutunu kopyalama.
-- **🎯 Reklam ve Ses Efekti Filtreleme:** Küçük reklam seslerini veya buton efektlerini (150 KB altı) filtreleyerek listeyi temiz tutar.
-- **🔒 Güvenli ve Gizlilik Odaklı:** Hiçbir veri harici sunucuya gitmez, tüm analiz ve indirme işlemleri yerel olarak tarayıcınızda gerçekleşir.
+  - **Sayfa İçi Oynatıcılar (DOM Scanner):** HTML5 video/audio etiketlerini analiz ederek çözünürlük (4K, 1080p, 720p vb.), süre ve altyazıları çıkarır.
+- **📦 HLS / M3U8 Parçalı Akış Birleştiricisi:** Parçalı `.m3u8` akışlarını arka planda otomatik indirip eksiksiz video dosyası (`.ts`) olarak birleştirir.
+- **🎬 Mini Önizleme Oynatıcısı:** Videoyu indirmeden önce açılır pencere içinde anında önizleme imkanı.
+- **📋 Tek Tıkla Bağlantı ve FFmpeg Kopyalama:** Doğrudan video URL'sini kopyalayabilme.
+- **🎯 Reklam ve Ses Efekti Filtreleme:** Küçük reklam ve buton seslerini filtreleyerek listeyi temiz tutar.
+- **🔒 Güvenli ve Gizlilik Odaklı:** Hiçbir veri harici sunucuya gitmez, tüm analiz ve indirme yerel olarak tarayıcınızda gerçekleşir.
 
 ---
 

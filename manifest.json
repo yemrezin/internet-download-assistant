@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Internet Video Download Assistant",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "IDM tarzında web sayfalarındaki videoları otomatik tespit edip yüksek kalitede indiren video indirme yardımcısı.",
   "icons": {
     "16": "icons/icon-16.png",
