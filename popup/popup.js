@@ -302,7 +302,7 @@ class PopupUIManager {
 
     if (progressFill) progressFill.style.width = '100%';
     if (statusPercent) statusPercent.textContent = '100%';
-    if (statusText) statusText.textContent = '✓ İndirme tamamlandı!';
+    if (statusText) statusText.textContent = '✓ Dosya hazırlandı, tarayıcı indirme paneline aktarıldı!';
 
     if (btn) {
       btn.classList.remove('btn-download--active');
@@ -543,10 +543,8 @@ class PopupUIManager {
         rawUrl.includes('playlist.txt') ||
         rawUrl.includes('sublist_');
 
-      const isSub = item.isSubtitle || (item.format || '').toUpperCase() === 'VTT' || (item.format || '').toUpperCase() === 'SRT';
-
-      if (isM3u8 || isSub) {
-        // Delegate to persistent background offscreen download engine so downloads survive tab change and popup close
+      if (isM3u8) {
+        // Delegate HLS streams to persistent background offscreen download engine for segment assembly
         const res = await chrome.runtime.sendMessage({
           type: 'START_STREAM_DOWNLOAD',
           item: itemWithContext
@@ -561,18 +559,16 @@ class PopupUIManager {
             buttonEl.innerHTML = `<span>%${percent} İndiriliyor</span>`;
           };
 
-          if (isM3u8 && window.StreamDownloadEngine) {
+          if (window.StreamDownloadEngine) {
             const engine = new window.StreamDownloadEngine(6);
             await engine.downloadHlsStream(itemWithContext, onProgress);
-          } else if (isSub && window.StreamDownloadEngine) {
-            const engine = new window.StreamDownloadEngine();
-            await engine.downloadSubtitle(itemWithContext, onProgress);
           }
         }
       } else {
-        // Direct media download via background service worker
-        if (progressFill) progressFill.style.width = '50%';
-        if (statusText) statusText.textContent = 'İndirme tarayıcıya iletiliyor...';
+        // Direct media download (MP4, VTT subtitles, SRT, MP3, etc.) natively via browser download manager
+        if (progressFill) progressFill.style.width = '100%';
+        if (statusPercent) statusPercent.textContent = '100%';
+        if (statusText) statusText.textContent = 'Tarayıcı indirme yöneticisine aktarılıyor...';
 
         const res = await chrome.runtime.sendMessage({
           type: 'DOWNLOAD_MEDIA',

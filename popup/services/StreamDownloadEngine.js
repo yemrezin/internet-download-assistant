@@ -229,12 +229,12 @@ class StreamDownloadEngine {
       throw new Error('Çalma listesinde indirilebilir parça bulunamadı.');
     }
 
-    if (onProgress) onProgress({ percent: 12, status: `Toplam ${segments.length} parça bulundu. İndiriliyor...` });
+    if (onProgress) onProgress({ percent: 12, status: `Toplam ${segments.length} akış parçası toplanıyor...` });
 
     // Step 4: Download segments concurrently
     const mergedBlob = await this.fetchSegments(segments, onProgress);
 
-    if (onProgress) onProgress({ percent: 97, status: 'Parçalar birleştiriliyor...' });
+    if (onProgress) onProgress({ percent: 97, status: 'Akış parçaları birleştirilip video oluşturuluyor...' });
 
     // Step 5: Save assembled video file
     let rawTitle = (item.title || 'video').trim();
@@ -258,7 +258,7 @@ class StreamDownloadEngine {
               a.download = cleanFilename;
               a.click();
             }
-            if (onProgress) onProgress({ percent: 100, status: '✓ İndirildi!' });
+            if (onProgress) onProgress({ percent: 100, status: '✓ Hazırlandı, tarayıcı indirme geçmişine aktarıldı!' });
             setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
             resolve({ success: true, filename: cleanFilename, downloadId });
           }
@@ -268,7 +268,7 @@ class StreamDownloadEngine {
         a.href = blobUrl;
         a.download = cleanFilename;
         a.click();
-        if (onProgress) onProgress({ percent: 100, status: '✓ İndirildi!' });
+        if (onProgress) onProgress({ percent: 100, status: '✓ Hazırlandı, tarayıcı indirme geçmişine aktarıldı!' });
         setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
         resolve({ success: true, filename: cleanFilename });
       }
