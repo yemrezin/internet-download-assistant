@@ -34,6 +34,9 @@ class ServiceWorkerController {
   }
 
   initialize() {
+    // Clean up any stale or rogue dynamic network rules immediately on startup to protect YouTube/Google
+    this.headerRuleService.clearRules();
+
     // Start passive network sniffing
     this.mediaSnifferService.startListening();
 
@@ -121,6 +124,7 @@ class ServiceWorkerController {
 
               if (this.activeDownloadTasks.size === 0) {
                 chrome.action.setBadgeText({ text: '' });
+                await this.headerRuleService.clearRules();
               }
 
               sendResponse({ success: true, taskId });
@@ -131,6 +135,7 @@ class ServiceWorkerController {
               this.activeDownloadTasks.delete(message.taskId);
               if (this.activeDownloadTasks.size === 0) {
                 chrome.action.setBadgeText({ text: '' });
+                await this.headerRuleService.clearRules();
               }
               break;
             }
@@ -162,6 +167,7 @@ class ServiceWorkerController {
               setTimeout(async () => {
                 this.activeDownloadTasks.delete(message.taskId);
                 if (this.activeDownloadTasks.size === 0) {
+                  await this.headerRuleService.clearRules();
                   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
                   if (activeTab && activeTab.id) {
                     const media = await this.storageService.getTabMedia(activeTab.id);
@@ -184,6 +190,9 @@ class ServiceWorkerController {
               chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
               setTimeout(async () => {
                 this.activeDownloadTasks.delete(message.taskId);
+                if (this.activeDownloadTasks.size === 0) {
+                  await this.headerRuleService.clearRules();
+                }
                 chrome.action.setBadgeText({ text: '' });
               }, 6000);
               break;
