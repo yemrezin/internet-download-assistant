@@ -11,7 +11,7 @@ class ServiceWorkerController {
   constructor() {
     this.storageService = new StorageService();
     this.headerRuleService = new HeaderRuleService();
-    this.downloadService = new DownloadService(this.headerRuleService);
+    this.downloadService = new DownloadService(this.headerRuleService, this.storageService);
     this.mediaSnifferService = new MediaSnifferService(this.storageService);
   }
 
@@ -71,13 +71,32 @@ class ServiceWorkerController {
               break;
             }
 
+            case 'RESOLVE_ACTIVE_MEDIA_FOR_TAB': {
+              const targetTabId = message.tabId || tabId;
+              const media = await this.downloadService.resolveActiveTabMedia(targetTabId);
+              sendResponse({ success: !!media, media });
+              break;
+            }
+
+            case 'APPLY_HEADER_RULE': {
+              if (message.mediaUrl && message.referer) {
+                await this.headerRuleService.applyRefererRule(message.mediaUrl, message.referer);
+                sendResponse({ success: true });
+              } else {
+                sendResponse({ success: false, error: 'Eksik parametreler.' });
+              }
+              break;
+            }
+
             case 'DOWNLOAD_MEDIA': {
               const pageUrl = message.pageUrl || (sender.tab ? sender.tab.url : '');
               const result = await this.downloadService.executeDownload({
                 url: message.url,
                 title: message.title,
                 format: message.format,
-                pageUrl
+                pageUrl,
+                referer: message.referer,
+                tabId
               });
               sendResponse(result);
               break;

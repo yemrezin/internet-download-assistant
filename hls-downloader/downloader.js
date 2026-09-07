@@ -27,8 +27,15 @@ class HlsPlaylistParser {
 
       // Video variant streams
       if (line.startsWith('#EXT-X-STREAM-INF:')) {
-        const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
-        if (nextLine && !nextLine.startsWith('#')) {
+        let nextLine = '';
+        for (let j = i + 1; j < lines.length; j++) {
+          const candidate = lines[j].trim();
+          if (candidate && !candidate.startsWith('#')) {
+            nextLine = candidate;
+            break;
+          }
+        }
+        if (nextLine) {
           let res = 'Otomatik';
           const resMatch = line.match(/RESOLUTION=(\d+x\d+)/i);
           if (resMatch) res = resMatch[1];
@@ -206,13 +213,24 @@ class DownloaderUIManager {
     this.downloadEngine = new SegmentDownloadEngine(4);
   }
 
-  initialize() {
+  async initialize() {
     this.inputTitle.value = this.initialTitle;
     this.inputUrl.value = this.streamUrl;
 
     this.bindEvents();
 
     if (this.streamUrl) {
+      if (this.refererUrl) {
+        try {
+          await chrome.runtime.sendMessage({
+            type: 'APPLY_HEADER_RULE',
+            mediaUrl: this.streamUrl,
+            referer: this.refererUrl
+          });
+        } catch (e) {
+          console.warn('DownloaderUIManager: Failed to trigger APPLY_HEADER_RULE:', e);
+        }
+      }
       this.inspectPlaylist(this.streamUrl);
     } else {
       this.log('Akış adresi bulunamadı. Lütfen geçerli bir M3U8 adresi girin.', 'warn');
@@ -245,7 +263,8 @@ class DownloaderUIManager {
 
     this.btnCopyFFmpeg.addEventListener('click', async () => {
       const cleanTitle = (this.inputTitle.value || 'video').replace(/[/\\?%*:|"<>]/g, '_');
-      const cmd = `ffmpeg -i "${this.currentPlaylistUrl}" -c copy -bsf:a aac_adtstoasc "${cleanTitle}.mp4"`;
+      const headerFlag = this.refererUrl ? `-headers "Referer: ${this.refererUrl}\\r\\n" ` : '';
+      const cmd = `ffmpeg ${headerFlag}-i "${this.currentPlaylistUrl}" -c copy -bsf:a aac_adtstoasc "${cleanTitle}.mp4"`;
       try {
         await navigator.clipboard.writeText(cmd);
         this.btnCopyFFmpeg.textContent = 'FFmpeg Komutu Kopyalandı!';
@@ -331,17 +350,54 @@ class DownloaderUIManager {
 
   async downloadAudioOnly() {
     if (!this.currentAudioUrl) return;
-    this.log(`Ses/Dublaj parçası indiriliyor: ${this.selAudioTrack.selectedOptions[0]?.textContent}`);
-    const cleanTitle = (this.inputTitle.value || 'audio').replace(/[/\\?%*:|"<>]/g, '_');
+    const trackLabel = this.selAudioTrack.selectedOptions[0]?.textContent || 'Dublaj/Ses';
+    this.log(`Ses parçası hazırlanıyor: ${trackLabel}`);
+    let rawTitle = this.inputTitle.value.trim() || 'audio';
+    rawTitle = rawTitle.replace(/\.(mp4|ts|m3u8|txt|aac|mp3)$/i, '');
+    const cleanTitle = rawTitle.replace(/[/\\?%*:|"<>]/g, '_');
 
-    if (chrome.downloads) {
-      chrome.downloads.download({
-        url: this.currentAudioUrl,
-        filename: `${cleanTitle}_ses.m3u8`,
-        saveAs: true
-      });
-    } else {
-      window.open(this.currentAudioUrl, '_blank');
+    try {
+      // Check if audio source is an HLS playlist (e.g. sublist_aud1.txt or .m3u8)
+      const isAudioHls =
+        this.currentAudioUrl.includes('.txt') ||
+        this.currentAudioUrl.includes('.m3u8') ||
+        this.currentAudioUrl.includes('/hls/');
+
+      if (isAudioHls) {
+        this.log('Ses parçaları analiz ediliyor...');
+        const segments = await HlsPlaylistParser.extractSegments(this.currentAudioUrl);
+        if (segments && segments.length > 0) {
+          this.log(`Toplam ${segments.length} ses parçası bulundu. İndiriliyor...`);
+          const audioBlob = await this.downloadEngine.downloadSegments(
+            segments,
+            (progress) => {
+              this.log(`Ses indiriliyor: ${progress.completedCount} / ${progress.totalSegments} parça (%${progress.percent})`);
+            },
+            (msg, type) => this.log(msg, type)
+          );
+
+          const audioBlobUrl = URL.createObjectURL(audioBlob);
+          const audioFilename = `${cleanTitle}_ses.aac`;
+          const a = document.createElement('a');
+          a.href = audioBlobUrl;
+          a.download = audioFilename;
+          a.click();
+          this.log(`Ses dosyası (${audioFilename}) başarıyla kaydedildi!`, 'success');
+          return;
+        }
+      }
+
+      if (chrome.downloads) {
+        chrome.downloads.download({
+          url: this.currentAudioUrl,
+          filename: `${cleanTitle}_ses.aac`,
+          saveAs: true
+        });
+      } else {
+        window.open(this.currentAudioUrl, '_blank');
+      }
+    } catch (err) {
+      this.log(`Ses parçası indirilemedi: ${err.message}`, 'error');
     }
   }
 
@@ -353,7 +409,9 @@ class DownloaderUIManager {
       const text = await resp.text();
       const blob = new Blob([text], { type: 'text/vtt' });
       const blobUrl = URL.createObjectURL(blob);
-      const cleanTitle = (this.inputTitle.value || 'altyazi').replace(/[/\\?%*:|"<>]/g, '_');
+      let rawTitle = this.inputTitle.value.trim() || 'altyazi';
+      rawTitle = rawTitle.replace(/\.(mp4|ts|m3u8|txt|vtt|srt)$/i, '');
+      const cleanTitle = rawTitle.replace(/[/\\?%*:|"<>]/g, '_');
 
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -395,7 +453,8 @@ class DownloaderUIManager {
 
       this.progressText.textContent = 'Video birleştirildi!';
       const blobUrl = URL.createObjectURL(mergedBlob);
-      const rawTitle = this.inputTitle.value.trim() || 'video';
+      let rawTitle = this.inputTitle.value.trim() || 'video';
+      rawTitle = rawTitle.replace(/\.(mp4|ts|m3u8|txt)$/i, '');
       const cleanFilename = rawTitle.replace(/[/\\?%*:|"<>]/g, '_') + '.ts';
 
       this.log(`Tamamlandı! Boyut: ${(mergedBlob.size / (1024 * 1024)).toFixed(2)} MB`, 'success');
@@ -408,7 +467,15 @@ class DownloaderUIManager {
             saveAs: true
           },
           () => {
-            this.log('İndirme tarayıcı tarafından başlatıldı.', 'success');
+            if (chrome.runtime.lastError) {
+              const a = document.createElement('a');
+              a.href = blobUrl;
+              a.download = cleanFilename;
+              a.click();
+              this.log('İndirme doğrudan başlatıldı.', 'success');
+            } else {
+              this.log('İndirme tarayıcı tarafından başlatıldı.', 'success');
+            }
           }
         );
       } else {

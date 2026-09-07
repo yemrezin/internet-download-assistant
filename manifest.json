@@ -28,6 +28,7 @@
     "storage",
     "tabs",
     "webRequest",
+    "webRequestExtraHeaders",
     "scripting",
     "declarativeNetRequest"
   ],

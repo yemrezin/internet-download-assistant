@@ -22,12 +22,16 @@ export class MediaClassifier {
     // HLS / M3U8 detection (including disguised playlists like /hls/ or master.txt)
     if (
       mime.includes('mpegurl') ||
+      mime.includes('application/x-mpegurl') ||
+      mime.includes('application/vnd.apple.mpegurl') ||
       cleanUrl.endsWith('.m3u8') ||
       url.includes('.m3u8') ||
       url.includes('/hls/') ||
       url.includes('/master.') ||
       url.includes('/playlist.') ||
-      url.includes('master.txt')
+      url.includes('master.txt') ||
+      url.includes('sublist_') ||
+      url.includes('playlist.txt')
     ) {
       return 'M3U8';
     }
@@ -72,14 +76,27 @@ export class MediaClassifier {
    * @returns {boolean}
    */
   static isHlsStream(format = '', url = '') {
+    const f = (format || '').toUpperCase();
+    const u = (url || '').toLowerCase();
     return (
-      format === 'M3U8' ||
-      url.includes('.m3u8') ||
-      url.includes('/hls/') ||
-      url.includes('/master.') ||
-      url.includes('/playlist.') ||
-      url.includes('master.txt')
+      f === 'M3U8' ||
+      u.includes('.m3u8') ||
+      u.includes('/hls/') ||
+      u.includes('/master.') ||
+      u.includes('/playlist.') ||
+      u.includes('master.txt') ||
+      u.includes('sublist_') ||
+      u.includes('playlist.txt')
     );
+  }
+
+  /**
+   * Checks if a URL is an in-memory MSE Blob object URL
+   * @param {string} url
+   * @returns {boolean}
+   */
+  static isBlobUrl(url = '') {
+    return typeof url === 'string' && url.startsWith('blob:');
   }
 
   /**

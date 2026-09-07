@@ -195,21 +195,43 @@ class VideoOverlayPresenter {
     });
   }
 
-  triggerDownload(video) {
-    const mediaSource = video.currentSrc || video.src || '';
+  async triggerDownload(video) {
+    let mediaSource = video.currentSrc || video.src || '';
+    const sourceEl = video.querySelector('source');
+    let effectiveUrl = mediaSource || (sourceEl ? sourceEl.src : '');
     const docTitle = document.title ? document.title.split(' - ')[0].trim() : 'Video';
-    const effectiveUrl = mediaSource || (video.querySelector('source') ? video.querySelector('source').src : '');
+    let targetFormat = 'MP4';
+    let targetReferer = window.location.href;
 
-    if (!effectiveUrl) {
-      this.showToast('Video bağlantısı henüz hazır değil, lütfen oynatın.', false);
+    // Resolve active media from background if MSE Blob URL or empty
+    if (!effectiveUrl || effectiveUrl.startsWith('blob:')) {
+      try {
+        const response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ type: 'RESOLVE_ACTIVE_MEDIA_FOR_TAB' }, resolve);
+        });
+
+        if (response && response.success && response.media) {
+          effectiveUrl = response.media.url;
+          targetFormat = response.media.format || 'MP4';
+          targetReferer = response.media.referer || window.location.href;
+        }
+      } catch (err) {
+        console.warn('VideoOverlayPresenter: Failed to resolve active stream:', err);
+      }
+    }
+
+    if (!effectiveUrl || effectiveUrl.startsWith('blob:')) {
+      this.showToast('Video akışı henüz yakalanmadı. Lütfen videoyu 1-2 saniye oynatın.', false);
       return;
     }
 
     const isHls =
+      targetFormat === 'M3U8' ||
       effectiveUrl.includes('.m3u8') ||
       effectiveUrl.includes('/hls/') ||
       effectiveUrl.includes('/master.') ||
-      effectiveUrl.includes('master.txt');
+      effectiveUrl.includes('master.txt') ||
+      effectiveUrl.includes('sublist_');
 
     chrome.runtime.sendMessage(
       {
@@ -217,7 +239,8 @@ class VideoOverlayPresenter {
         url: effectiveUrl,
         title: docTitle,
         pageUrl: window.location.href,
-        format: isHls ? 'M3U8' : 'MP4'
+        referer: targetReferer,
+        format: isHls ? 'M3U8' : targetFormat
       },
       (res) => {
         if (res && res.success) {

@@ -14,8 +14,14 @@ class MediaCardRenderer {
     const card = document.createElement('div');
     card.className = 'media-card';
 
-    const format = (item.format || 'MP4').toUpperCase();
-    const isM3u8 = format === 'M3U8';
+    const rawUrl = (item.url || '').toLowerCase();
+    const isM3u8 =
+      (item.format || '').toUpperCase() === 'M3U8' ||
+      rawUrl.includes('.m3u8') ||
+      rawUrl.includes('/hls/') ||
+      rawUrl.includes('master.txt') ||
+      rawUrl.includes('sublist_');
+    const format = isM3u8 ? 'M3U8' : (item.format || 'MP4').toUpperCase();
     const isSub = item.isSubtitle || format === 'VTT' || format === 'SRT' || format === 'TTML';
     const isAudio = format === 'MP3' || format === 'AAC' || format === 'M4A' || format === 'SES';
 
@@ -187,13 +193,18 @@ class PopupUIManager {
     const originalText = buttonEl.innerHTML;
     buttonEl.innerHTML = `<span>Başlatılıyor...</span>`;
 
+    const effectivePageUrl = item.pageUrl || (this.currentTab ? this.currentTab.url : '');
+    const effectiveReferer = item.referer || effectivePageUrl;
+
     try {
       const res = await chrome.runtime.sendMessage({
         type: 'DOWNLOAD_MEDIA',
         url: item.url,
         title: item.title,
-        pageUrl: item.pageUrl || (this.currentTab ? this.currentTab.url : ''),
-        format: item.format
+        pageUrl: effectivePageUrl,
+        referer: effectiveReferer,
+        format: item.format,
+        tabId: this.currentTab ? this.currentTab.id : undefined
       });
 
       if (res && res.success) {
@@ -219,13 +230,17 @@ class PopupUIManager {
     this.btnDownloadAll.disabled = true;
     this.btnDownloadAll.textContent = 'İndiriliyor...';
 
+    const effectivePageUrl = this.currentTab ? this.currentTab.url : '';
+
     for (const item of this.mediaItems) {
       await chrome.runtime.sendMessage({
         type: 'DOWNLOAD_MEDIA',
         url: item.url,
         title: item.title,
-        pageUrl: item.pageUrl || (this.currentTab ? this.currentTab.url : ''),
-        format: item.format
+        pageUrl: item.pageUrl || effectivePageUrl,
+        referer: item.referer || item.pageUrl || effectivePageUrl,
+        format: item.format,
+        tabId: this.currentTab ? this.currentTab.id : undefined
       });
       await new Promise((r) => setTimeout(r, 600));
     }
