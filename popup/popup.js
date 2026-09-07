@@ -49,7 +49,7 @@ class MediaCardRenderer {
       <div class="card-actions">
         <button class="btn-download" data-index="${index}">
           <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-          <span>${isM3u8 ? 'HLS İndiriciyi Aç' : 'İndir'}</span>
+          <span>İndir</span>
         </button>
         <div class="card-icon-actions">
           <button class="action-icon-btn btn-preview" data-index="${index}" title="Önizle">
@@ -63,11 +63,20 @@ class MediaCardRenderer {
           </button>
         </div>
       </div>
+      <div class="card-progress-wrapper hidden">
+        <div class="card-progress-bar">
+          <div class="card-progress-fill"></div>
+        </div>
+        <div class="card-progress-status">
+          <span class="status-text">Hazırlanıyor...</span>
+          <span class="status-percent">0%</span>
+        </div>
+      </div>
     `;
 
     // Event bindings
     const dlBtn = card.querySelector('.btn-download');
-    dlBtn.addEventListener('click', () => callbacks.onDownload(item, dlBtn));
+    dlBtn.addEventListener('click', () => callbacks.onDownload(item, dlBtn, card));
 
     const previewBtn = card.querySelector('.btn-preview');
     previewBtn.addEventListener('click', () => callbacks.onPreview(item));
@@ -179,7 +188,7 @@ class PopupUIManager {
 
     this.mediaItems.forEach((item, index) => {
       const card = MediaCardRenderer.render(item, index, {
-        onDownload: (m, btn) => this.downloadItem(m, btn),
+        onDownload: (m, btn, c) => this.downloadItem(m, btn, c),
         onPreview: (m) => this.playPreview(m),
         onCopy: (url, btn) => this.copyUrl(url, btn),
         onOpenTab: (url) => chrome.tabs.create({ url })
@@ -188,40 +197,97 @@ class PopupUIManager {
     });
   }
 
-  async downloadItem(item, buttonEl) {
+  async downloadItem(item, buttonEl, cardEl) {
+    const progressWrapper = cardEl ? cardEl.querySelector('.card-progress-wrapper') : null;
+    const progressFill = cardEl ? cardEl.querySelector('.card-progress-fill') : null;
+    const statusText = cardEl ? cardEl.querySelector('.status-text') : null;
+    const statusPercent = cardEl ? cardEl.querySelector('.status-percent') : null;
+
     buttonEl.disabled = true;
+    buttonEl.classList.add('btn-download--active');
     const originalText = buttonEl.innerHTML;
-    buttonEl.innerHTML = `<span>Başlatılıyor...</span>`;
+    buttonEl.innerHTML = `<span>Hazırlanıyor...</span>`;
+
+    if (progressWrapper) {
+      progressWrapper.classList.remove('hidden');
+      if (progressFill) progressFill.style.width = '0%';
+      if (statusPercent) statusPercent.textContent = '0%';
+      if (statusText) statusText.textContent = 'Başlatılıyor...';
+    }
+
+    const onProgress = ({ percent, status }) => {
+      if (progressFill) progressFill.style.width = `${percent}%`;
+      if (statusPercent) statusPercent.textContent = `${percent}%`;
+      if (statusText) statusText.textContent = status || '';
+      buttonEl.innerHTML = `<span>%${percent} İndiriliyor</span>`;
+    };
 
     const effectivePageUrl = item.pageUrl || (this.currentTab ? this.currentTab.url : '');
     const effectiveReferer = item.referer || effectivePageUrl;
+    const itemWithContext = { ...item, referer: effectiveReferer, pageUrl: effectivePageUrl };
 
     try {
-      const res = await chrome.runtime.sendMessage({
-        type: 'DOWNLOAD_MEDIA',
-        url: item.url,
-        title: item.title,
-        pageUrl: effectivePageUrl,
-        referer: effectiveReferer,
-        format: item.format,
-        tabId: this.currentTab ? this.currentTab.id : undefined
-      });
+      const rawUrl = (item.url || '').toLowerCase();
+      const isM3u8 =
+        (item.format || '').toUpperCase() === 'M3U8' ||
+        rawUrl.includes('.m3u8') ||
+        rawUrl.includes('/hls/') ||
+        rawUrl.includes('master.txt') ||
+        rawUrl.includes('sublist_');
 
-      if (res && res.success) {
-        buttonEl.innerHTML = `<span>✓ Başlatıldı</span>`;
-        setTimeout(() => {
-          buttonEl.disabled = false;
-          buttonEl.innerHTML = originalText;
-        }, 2500);
+      const isSub = item.isSubtitle || (item.format || '').toUpperCase() === 'VTT' || (item.format || '').toUpperCase() === 'SRT';
+
+      if (isM3u8 && window.StreamDownloadEngine) {
+        // Direct in-popup HLS segment downloading and assembly
+        const engine = new window.StreamDownloadEngine(6);
+        await engine.downloadHlsStream(itemWithContext, onProgress);
+      } else if (isSub && window.StreamDownloadEngine) {
+        // Direct in-popup subtitle downloading
+        const engine = new window.StreamDownloadEngine();
+        await engine.downloadSubtitle(itemWithContext, onProgress);
       } else {
-        alert(`İndirme başlatılamadı: ${res ? res.error : 'Hata oluştu'}`);
-        buttonEl.disabled = false;
-        buttonEl.innerHTML = originalText;
+        // Direct media download via background service worker
+        onProgress({ percent: 50, status: 'İndirme tarayıcıya iletiliyor...' });
+        const res = await chrome.runtime.sendMessage({
+          type: 'DOWNLOAD_MEDIA',
+          url: item.url,
+          title: item.title,
+          pageUrl: effectivePageUrl,
+          referer: effectiveReferer,
+          format: item.format,
+          tabId: this.currentTab ? this.currentTab.id : undefined
+        });
+
+        if (!res || !res.success) {
+          throw new Error(res ? res.error : 'İndirme başlatılamadı');
+        }
+        onProgress({ percent: 100, status: '✓ İndirme başlatıldı!' });
       }
+
+      buttonEl.classList.remove('btn-download--active');
+      buttonEl.classList.add('btn-download--success');
+      buttonEl.innerHTML = `<span>✓ İndirildi</span>`;
+
+      setTimeout(() => {
+        buttonEl.disabled = false;
+        buttonEl.classList.remove('btn-download--success');
+        buttonEl.innerHTML = originalText;
+        if (progressWrapper) progressWrapper.classList.add('hidden');
+      }, 4500);
+
     } catch (err) {
-      alert(`İndirme hatası: ${err.message}`);
-      buttonEl.disabled = false;
-      buttonEl.innerHTML = originalText;
+      console.error('Download error:', err);
+      buttonEl.classList.remove('btn-download--active');
+      buttonEl.classList.add('btn-download--error');
+      buttonEl.innerHTML = `<span>✕ Hata</span>`;
+      if (statusText) statusText.textContent = `Hata: ${err.message}`;
+      if (statusPercent) statusPercent.textContent = '!';
+
+      setTimeout(() => {
+        buttonEl.disabled = false;
+        buttonEl.classList.remove('btn-download--error');
+        buttonEl.innerHTML = originalText;
+      }, 4000);
     }
   }
 
@@ -230,26 +296,24 @@ class PopupUIManager {
     this.btnDownloadAll.disabled = true;
     this.btnDownloadAll.textContent = 'İndiriliyor...';
 
-    const effectivePageUrl = this.currentTab ? this.currentTab.url : '';
+    const cards = Array.from(this.mediaListEl.children);
 
-    for (const item of this.mediaItems) {
-      await chrome.runtime.sendMessage({
-        type: 'DOWNLOAD_MEDIA',
-        url: item.url,
-        title: item.title,
-        pageUrl: item.pageUrl || effectivePageUrl,
-        referer: item.referer || item.pageUrl || effectivePageUrl,
-        format: item.format,
-        tabId: this.currentTab ? this.currentTab.id : undefined
-      });
-      await new Promise((r) => setTimeout(r, 600));
+    for (let i = 0; i < this.mediaItems.length; i++) {
+      const item = this.mediaItems[i];
+      const card = cards[i];
+      const btn = card ? card.querySelector('.btn-download') : null;
+
+      if (btn) {
+        await this.downloadItem(item, btn, card);
+      }
+      await new Promise((r) => setTimeout(r, 400));
     }
 
-    this.btnDownloadAll.textContent = 'Tamamlandı';
+    this.btnDownloadAll.textContent = 'Tümü Tamamlandı';
     setTimeout(() => {
       this.btnDownloadAll.disabled = false;
       this.btnDownloadAll.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Tümünü İndir`;
-    }, 2000);
+    }, 2500);
   }
 
   playPreview(item) {

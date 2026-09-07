@@ -244,8 +244,10 @@ class VideoOverlayPresenter {
       },
       (res) => {
         if (res && res.success) {
-          if (res.openedDownloader) {
-            this.showToast('M3U8 Akış İndiricisi açıldı!');
+          if (res.openedPopup) {
+            this.showToast('İndirme listesi açıldı. İstediğiniz videoyu seçip indirebilirsiniz.');
+          } else if (res.message) {
+            this.showToast(res.message);
           } else {
             this.showToast(`İndirme başlatıldı: ${docTitle}`);
           }

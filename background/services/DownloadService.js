@@ -73,13 +73,20 @@ export class DownloadService {
       await this.headerRuleService.applyRefererRule(effectiveUrl, effectiveReferer);
     }
 
-    // Route HLS / M3U8 streams to dedicated segment downloader
+    // Do NOT open external tabs. User selects and downloads directly from the popup list.
     if (isHls) {
-      const hlsUrl = chrome.runtime.getURL(
-        `hls-downloader/downloader.html?url=${encodeURIComponent(effectiveUrl)}&title=${encodeURIComponent(effectiveTitle)}&referer=${encodeURIComponent(effectiveReferer)}`
-      );
-      await chrome.tabs.create({ url: hlsUrl });
-      return { success: true, openedDownloader: true };
+      if (chrome.action && chrome.action.openPopup) {
+        try {
+          await chrome.action.openPopup();
+          return { success: true, openedPopup: true };
+        } catch {
+          // Ignored
+        }
+      }
+      return {
+        success: true,
+        message: 'Lütfen eklenti simgesine tıklayarak açılan listeden indirmeyi seçin.'
+      };
     }
 
     const fallbackExt = (effectiveFormat || 'mp4').toLowerCase();
@@ -99,16 +106,28 @@ export class DownloadService {
           const errorMsg = chrome.runtime.lastError.message;
           console.warn('DownloadService: chrome.downloads failed, attempting fallback fetch download:', errorMsg);
 
-          // Fallback: Fetch via background fetcher to bypass hotlinking or CORS blocks, then save Blob URL
+          // Fallback: Fetch via background fetcher to bypass hotlinking or CORS blocks
           try {
             const resp = await fetch(effectiveUrl);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const blob = await resp.blob();
-            const localBlobUrl = URL.createObjectURL(blob);
+
+            let targetUrl = '';
+            if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+              targetUrl = URL.createObjectURL(blob);
+            } else {
+              const buffer = await blob.arrayBuffer();
+              const bytes = new Uint8Array(buffer);
+              let binary = '';
+              for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+              }
+              targetUrl = `data:${blob.type || 'application/octet-stream'};base64,${btoa(binary)}`;
+            }
 
             chrome.downloads.download(
               {
-                url: localBlobUrl,
+                url: targetUrl,
                 filename: cleanFilename,
                 saveAs: false
               },
