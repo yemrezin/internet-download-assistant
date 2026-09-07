@@ -154,7 +154,9 @@ class PopupUIManager {
   async initialize() {
     await this.resolveActiveTab();
     this.bindEvents();
+    this.bindRuntimeMessages();
     await this.fetchMedia();
+    await this.restoreActiveDownloads();
   }
 
   async resolveActiveTab() {
@@ -197,6 +199,101 @@ class PopupUIManager {
         chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html') });
       }
     });
+  }
+
+  bindRuntimeMessages() {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'DOWNLOAD_TASK_PROGRESS') {
+        this.updateTaskProgress(message);
+      } else if (message.type === 'DOWNLOAD_TASK_COMPLETE') {
+        this.handleTaskComplete(message.taskId);
+      } else if (message.type === 'DOWNLOAD_TASK_ERROR') {
+        this.handleTaskError(message.taskId, message.error);
+      }
+    });
+  }
+
+  async restoreActiveDownloads() {
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'GET_ACTIVE_DOWNLOADS' });
+      if (res && res.success && res.tasks) {
+        for (const task of res.tasks) {
+          this.updateTaskProgress(task);
+        }
+      }
+    } catch {}
+  }
+
+  updateTaskProgress(task) {
+    const card = this.mediaListEl.querySelector(`.media-card[data-id="${task.taskId || task.id}"]`);
+    if (!card) return;
+
+    const progressWrapper = card.querySelector('.card-progress-wrapper');
+    const progressFill = card.querySelector('.card-progress-fill');
+    const statusText = card.querySelector('.status-text');
+    const statusPercent = card.querySelector('.status-percent');
+    const btn = card.querySelector('.btn-download');
+
+    if (progressWrapper) progressWrapper.classList.remove('hidden');
+    if (progressFill) progressFill.style.width = `${task.percent || 0}%`;
+    if (statusPercent) statusPercent.textContent = `${task.percent || 0}%`;
+    if (statusText) statusText.textContent = task.status || '';
+
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('btn-download--active');
+      btn.innerHTML = `<span>%${task.percent || 0} İndiriliyor</span>`;
+    }
+  }
+
+  handleTaskComplete(taskId) {
+    const card = this.mediaListEl.querySelector(`.media-card[data-id="${taskId}"]`);
+    if (!card) return;
+
+    const progressFill = card.querySelector('.card-progress-fill');
+    const statusText = card.querySelector('.status-text');
+    const statusPercent = card.querySelector('.status-percent');
+    const btn = card.querySelector('.btn-download');
+
+    if (progressFill) progressFill.style.width = '100%';
+    if (statusPercent) statusPercent.textContent = '100%';
+    if (statusText) statusText.textContent = '✓ İndirme tamamlandı!';
+
+    if (btn) {
+      btn.classList.remove('btn-download--active');
+      btn.classList.add('btn-download--success');
+      btn.innerHTML = `<span>✓ İndirildi</span>`;
+
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.classList.remove('btn-download--success');
+        btn.innerHTML = `<span>İndir</span>`;
+      }, 4000);
+    }
+  }
+
+  handleTaskError(taskId, error) {
+    const card = this.mediaListEl.querySelector(`.media-card[data-id="${taskId}"]`);
+    if (!card) return;
+
+    const statusText = card.querySelector('.status-text');
+    const statusPercent = card.querySelector('.status-percent');
+    const btn = card.querySelector('.btn-download');
+
+    if (statusPercent) statusPercent.textContent = '!';
+    if (statusText) statusText.textContent = `Hata: ${error || 'Bilinmeyen hata'}`;
+
+    if (btn) {
+      btn.classList.remove('btn-download--active');
+      btn.classList.add('btn-download--error');
+      btn.innerHTML = `<span>✕ Hata</span>`;
+
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.classList.remove('btn-download--error');
+        btn.innerHTML = `<span>İndir</span>`;
+      }, 4000);
+    }
   }
 
   toggleSelect(id, isSelected) {
@@ -291,7 +388,7 @@ class PopupUIManager {
       if (this.btnDownloadSelected) {
         this.btnDownloadSelected.disabled = true;
         this.btnDownloadSelected.classList.add('disabled');
-        if (this.btnDownloadSelectedText) this.btnDownloadSelectedText.textContent = 'Seçilenleri İndir';
+        if (this.btnDownloadSelectedText) this.btnDownloadSelectedText.textContent = 'İndirilecek Seçin';
       }
       return;
     }
@@ -306,10 +403,7 @@ class PopupUIManager {
       if (!currentValidIds.has(id)) this.selectedIds.delete(id);
     }
 
-    // Default: Select all video/media items if none selected
-    if (this.selectedIds.size === 0) {
-      this.mediaItems.forEach((m) => this.selectedIds.add(m.id));
-    }
+    // Unchecked by default (per user request: "tikler işaretsiz gelsin")
 
     this.mediaItems.forEach((item, index) => {
       const isSelected = this.selectedIds.has(item.id);
@@ -324,6 +418,7 @@ class PopupUIManager {
     });
 
     this.updateSelectionUI();
+    this.restoreActiveDownloads();
   }
 
   async downloadSelected() {
@@ -388,13 +483,6 @@ class PopupUIManager {
       if (statusText) statusText.textContent = 'Başlatılıyor...';
     }
 
-    const onProgress = ({ percent, status }) => {
-      if (progressFill) progressFill.style.width = `${percent}%`;
-      if (statusPercent) statusPercent.textContent = `${percent}%`;
-      if (statusText) statusText.textContent = status || '';
-      buttonEl.innerHTML = `<span>%${percent} İndiriliyor</span>`;
-    };
-
     const effectivePageUrl = item.pageUrl || (this.currentTab ? this.currentTab.url : '');
     const effectiveReferer = item.referer || effectivePageUrl;
     const itemWithContext = { ...item, referer: effectiveReferer, pageUrl: effectivePageUrl };
@@ -404,23 +492,42 @@ class PopupUIManager {
       const isM3u8 =
         (item.format || '').toUpperCase() === 'M3U8' ||
         rawUrl.includes('.m3u8') ||
-        rawUrl.includes('/hls/') ||
         rawUrl.includes('master.txt') ||
+        rawUrl.includes('/master.') ||
+        rawUrl.includes('playlist.txt') ||
         rawUrl.includes('sublist_');
 
       const isSub = item.isSubtitle || (item.format || '').toUpperCase() === 'VTT' || (item.format || '').toUpperCase() === 'SRT';
 
-      if (isM3u8 && window.StreamDownloadEngine) {
-        // Direct in-popup HLS segment downloading and assembly
-        const engine = new window.StreamDownloadEngine(6);
-        await engine.downloadHlsStream(itemWithContext, onProgress);
-      } else if (isSub && window.StreamDownloadEngine) {
-        // Direct in-popup subtitle downloading
-        const engine = new window.StreamDownloadEngine();
-        await engine.downloadSubtitle(itemWithContext, onProgress);
+      if (isM3u8 || isSub) {
+        // Delegate to persistent background offscreen download engine so downloads survive tab change and popup close
+        const res = await chrome.runtime.sendMessage({
+          type: 'START_STREAM_DOWNLOAD',
+          item: itemWithContext
+        });
+
+        if (!res || !res.success) {
+          // Fallback to in-popup engine if offscreen fails
+          const onProgress = ({ percent, status }) => {
+            if (progressFill) progressFill.style.width = `${percent}%`;
+            if (statusPercent) statusPercent.textContent = `${percent}%`;
+            if (statusText) statusText.textContent = status || '';
+            buttonEl.innerHTML = `<span>%${percent} İndiriliyor</span>`;
+          };
+
+          if (isM3u8 && window.StreamDownloadEngine) {
+            const engine = new window.StreamDownloadEngine(6);
+            await engine.downloadHlsStream(itemWithContext, onProgress);
+          } else if (isSub && window.StreamDownloadEngine) {
+            const engine = new window.StreamDownloadEngine();
+            await engine.downloadSubtitle(itemWithContext, onProgress);
+          }
+        }
       } else {
         // Direct media download via background service worker
-        onProgress({ percent: 50, status: 'İndirme tarayıcıya iletiliyor...' });
+        if (progressFill) progressFill.style.width = '50%';
+        if (statusText) statusText.textContent = 'İndirme tarayıcıya iletiliyor...';
+
         const res = await chrome.runtime.sendMessage({
           type: 'DOWNLOAD_MEDIA',
           url: item.url,
@@ -434,20 +541,21 @@ class PopupUIManager {
         if (!res || !res.success) {
           throw new Error(res ? res.error : 'İndirme başlatılamadı');
         }
-        onProgress({ percent: 100, status: '✓ İndirme başlatıldı!' });
+
+        if (progressFill) progressFill.style.width = '100%';
+        if (statusPercent) statusPercent.textContent = '100%';
+        if (statusText) statusText.textContent = '✓ İndirme başlatıldı!';
+        buttonEl.classList.remove('btn-download--active');
+        buttonEl.classList.add('btn-download--success');
+        buttonEl.innerHTML = `<span>✓ İndirildi</span>`;
+
+        setTimeout(() => {
+          buttonEl.disabled = false;
+          buttonEl.classList.remove('btn-download--success');
+          buttonEl.innerHTML = originalText;
+          if (progressWrapper) progressWrapper.classList.add('hidden');
+        }, 4500);
       }
-
-      buttonEl.classList.remove('btn-download--active');
-      buttonEl.classList.add('btn-download--success');
-      buttonEl.innerHTML = `<span>✓ İndirildi</span>`;
-
-      setTimeout(() => {
-        buttonEl.disabled = false;
-        buttonEl.classList.remove('btn-download--success');
-        buttonEl.innerHTML = originalText;
-        if (progressWrapper) progressWrapper.classList.add('hidden');
-      }, 4500);
-
     } catch (err) {
       console.error('Download error:', err);
       buttonEl.classList.remove('btn-download--active');

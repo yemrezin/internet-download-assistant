@@ -131,17 +131,28 @@ export class MediaSnifferService {
       return;
     }
 
-    // Check if there is already a primary video from the same video stream on this page
+    // Only collapse if this is a sublist of the exact same master stream or identical base stream
     if (isManifest && !isSubtitle && !isAudio) {
-      const existingVideoIdx = currentMedia.findIndex(
-        (m) => (m.format === 'M3U8' || MediaClassifier.isHlsStream(m.format, m.url)) && !m.isSubtitle
-      );
-      if (existingVideoIdx >= 0) {
-        // If current is master and existing is not master, upgrade existing
-        if (isMaster && !MediaClassifier.isMasterPlaylist(currentMedia[existingVideoIdx].url)) {
-          currentMedia[existingVideoIdx].url = item.url;
-          currentMedia[existingVideoIdx].quality = quality;
-          currentMedia[existingVideoIdx].sizeFormatted = sizeFormatted;
+      const sameStreamIdx = currentMedia.findIndex((m) => {
+        if (m.isSubtitle || m.isAudio) return false;
+        try {
+          const u1 = new URL(m.url);
+          const u2 = new URL(item.url);
+          // Same host and same directory path means it's the exact same stream
+          const p1 = u1.pathname.substring(0, u1.pathname.lastIndexOf('/'));
+          const p2 = u2.pathname.substring(0, u2.pathname.lastIndexOf('/'));
+          return u1.host === u2.host && p1 === p2;
+        } catch {
+          return m.url === item.url;
+        }
+      });
+
+      if (sameStreamIdx >= 0) {
+        // If current is master and existing is just a sublist, upgrade existing
+        if (isMaster && !MediaClassifier.isMasterPlaylist(currentMedia[sameStreamIdx].url)) {
+          currentMedia[sameStreamIdx].url = item.url;
+          currentMedia[sameStreamIdx].quality = quality;
+          currentMedia[sameStreamIdx].sizeFormatted = sizeFormatted;
           await this.storageService.saveTabMedia(tabId, currentMedia);
         }
         return;
@@ -150,6 +161,13 @@ export class MediaSnifferService {
 
     if (isSubtitle && !cleanTitle.toLowerCase().includes('altyazı') && !cleanTitle.toLowerCase().includes('subtitle')) {
       cleanTitle = `${cleanTitle} (Altyazı)`;
+    } else if (!isSubtitle && !isAudio) {
+      const urlLower = item.url.toLowerCase();
+      if (urlLower.includes('dub') || urlLower.includes('turkce') || urlLower.includes('_tr')) {
+        if (!cleanTitle.toLowerCase().includes('dublaj')) cleanTitle += ' [Türkçe Dublaj]';
+      } else if (urlLower.includes('sub') || urlLower.includes('altyazi') || urlLower.includes('_sub') || urlLower.includes('_en')) {
+        if (!cleanTitle.toLowerCase().includes('altyazılı') && !cleanTitle.toLowerCase().includes('altyazı')) cleanTitle += ' [Altyazılı / Orijinal]';
+      }
     }
 
     item.id = `media_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;

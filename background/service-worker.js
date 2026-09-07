@@ -13,6 +13,24 @@ class ServiceWorkerController {
     this.headerRuleService = new HeaderRuleService();
     this.downloadService = new DownloadService(this.headerRuleService, this.storageService);
     this.mediaSnifferService = new MediaSnifferService(this.storageService);
+    this.activeDownloadTasks = new Map();
+  }
+
+  async ensureOffscreenDocument() {
+    if (chrome.offscreen && (await chrome.offscreen.hasDocument?.())) return;
+    try {
+      if (chrome.offscreen && chrome.offscreen.createDocument) {
+        await chrome.offscreen.createDocument({
+          url: 'offscreen/offscreen.html',
+          reasons: ['BLOBS', 'WORKERS'],
+          justification: 'Background HLS stream downloading and video assembly'
+        });
+      }
+    } catch (err) {
+      if (!err.message?.includes('Only a single offscreen document may be created')) {
+        console.warn('ServiceWorkerController: Failed creating offscreen document:', err);
+      }
+    }
   }
 
   initialize() {
@@ -27,7 +45,7 @@ class ServiceWorkerController {
   }
 
   registerTabListeners() {
-    // Reset tab media on navigation start
+    // Reset tab media on navigation start (active downloads are decoupled and persist)
     chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
       if (changeInfo.status === 'loading' && changeInfo.url) {
         await this.storageService.clearTabMedia(tabId);
@@ -41,8 +59,14 @@ class ServiceWorkerController {
 
     // Refresh action badge on tab switch
     chrome.tabs.onActivated.addListener(async (activeInfo) => {
-      const mediaList = await this.storageService.getTabMedia(activeInfo.tabId);
-      await this.storageService.updateBadge(activeInfo.tabId, mediaList.length);
+      if (this.activeDownloadTasks.size > 0) {
+        const lastTask = Array.from(this.activeDownloadTasks.values()).pop();
+        chrome.action.setBadgeText({ text: `${lastTask.percent || 0}%` });
+        chrome.action.setBadgeBackgroundColor({ color: '#0284c7' });
+      } else {
+        const mediaList = await this.storageService.getTabMedia(activeInfo.tabId);
+        await this.storageService.updateBadge(activeInfo.tabId, mediaList.length);
+      }
     });
   }
 
@@ -53,6 +77,98 @@ class ServiceWorkerController {
           const tabId = sender.tab ? sender.tab.id : message.tabId;
 
           switch (message.type) {
+            case 'START_STREAM_DOWNLOAD': {
+              await this.ensureOffscreenDocument();
+              const item = message.item;
+              const taskId = item.id || `task_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+
+              this.activeDownloadTasks.set(taskId, {
+                id: taskId,
+                item: item,
+                title: item.title,
+                percent: 0,
+                status: 'Başlatılıyor...',
+                timestamp: Date.now()
+              });
+
+              chrome.action.setBadgeText({ text: '0%' });
+              chrome.action.setBadgeBackgroundColor({ color: '#0284c7' });
+
+              chrome.runtime
+                .sendMessage({
+                  target: 'offscreen',
+                  type: 'EXECUTE_STREAM_DOWNLOAD',
+                  taskId,
+                  item
+                })
+                .catch((err) => console.warn('Failed delegating to offscreen:', err));
+
+              sendResponse({ success: true, taskId });
+              break;
+            }
+
+            case 'DOWNLOAD_TASK_PROGRESS': {
+              const task = this.activeDownloadTasks.get(message.taskId) || { id: message.taskId, item: {} };
+              task.percent = message.percent || 0;
+              task.status = message.status || '';
+              task.completedCount = message.completedCount || 0;
+              task.totalSegments = message.totalSegments || 0;
+              task.totalBytes = message.totalBytes || 0;
+              this.activeDownloadTasks.set(message.taskId, task);
+
+              chrome.action.setBadgeText({ text: `${task.percent}%` });
+              chrome.action.setBadgeBackgroundColor({ color: '#0284c7' });
+              break;
+            }
+
+            case 'DOWNLOAD_TASK_COMPLETE': {
+              const task = this.activeDownloadTasks.get(message.taskId);
+              if (task) {
+                task.percent = 100;
+                task.status = '✓ İndirildi!';
+                task.completed = true;
+              }
+              chrome.action.setBadgeText({ text: '✓' });
+              chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
+
+              setTimeout(async () => {
+                this.activeDownloadTasks.delete(message.taskId);
+                if (this.activeDownloadTasks.size === 0) {
+                  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+                  if (activeTab && activeTab.id) {
+                    const media = await this.storageService.getTabMedia(activeTab.id);
+                    await this.storageService.updateBadge(activeTab.id, media.length);
+                  } else {
+                    chrome.action.setBadgeText({ text: '' });
+                  }
+                }
+              }, 5000);
+              break;
+            }
+
+            case 'DOWNLOAD_TASK_ERROR': {
+              const task = this.activeDownloadTasks.get(message.taskId);
+              if (task) {
+                task.status = `Hata: ${message.error || 'Bilinmiyor'}`;
+                task.error = true;
+              }
+              chrome.action.setBadgeText({ text: '!' });
+              chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+              setTimeout(async () => {
+                this.activeDownloadTasks.delete(message.taskId);
+                chrome.action.setBadgeText({ text: '' });
+              }, 6000);
+              break;
+            }
+
+            case 'GET_ACTIVE_DOWNLOADS': {
+              sendResponse({
+                success: true,
+                tasks: Array.from(this.activeDownloadTasks.values())
+              });
+              break;
+            }
+
             case 'REGISTER_DOM_MEDIA': {
               if (tabId && message.media) {
                 await this.mediaSnifferService.registerMedia(tabId, {
