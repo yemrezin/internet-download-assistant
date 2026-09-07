@@ -1,6 +1,9 @@
-/* Internet Video Download Assistant - IDM Style Floating Widget Styles */
+/**
+ * Video Overlay Styles
+ * BEM Standard Naming: .vda-player-widget*
+ */
 
-.ida-floating-btn-container {
+.vda-player-widget {
   position: absolute;
   z-index: 2147483647;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -12,8 +15,8 @@
   pointer-events: auto;
 }
 
-/* When attached directly to video player (YouTube, Animecix, VideoJS, etc.) */
-.ida-floating-btn-container.ida-attached-to-player {
+/* When mounted directly inside a positioned player container */
+.vda-player-widget--attached {
   position: absolute !important;
   top: 14px !important;
   right: 14px !important;
@@ -22,11 +25,11 @@
   z-index: 2147483647 !important;
 }
 
-.ida-floating-btn-container * {
+.vda-player-widget * {
   box-sizing: border-box;
 }
 
-.ida-floating-btn {
+.vda-player-widget__action-btn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -44,24 +47,28 @@
   white-space: nowrap;
 }
 
-.ida-floating-btn:hover {
+.vda-player-widget__action-btn:hover {
   background: linear-gradient(135deg, rgba(2, 132, 199, 1), rgba(14, 165, 233, 1));
   box-shadow: 0 6px 20px rgba(2, 132, 199, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
   transform: translateY(-1px) scale(1.02);
 }
 
-.ida-floating-btn:active {
+.vda-player-widget__action-btn:active {
   transform: translateY(0) scale(0.98);
 }
 
-.ida-floating-btn svg {
+.vda-player-widget__icon {
   width: 16px;
   height: 16px;
   fill: currentColor;
   flex-shrink: 0;
 }
 
-.ida-badge-quality {
+.vda-player-widget__label {
+  color: #ffffff;
+}
+
+.vda-player-widget__quality-badge {
   display: inline-block;
   background: #10b981;
   color: #ffffff;
@@ -74,7 +81,7 @@
   text-transform: uppercase;
 }
 
-.ida-close-btn {
+.vda-player-widget__dismiss-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -88,20 +95,20 @@
   transition: background 0.2s, transform 0.15s;
 }
 
-.ida-close-btn:hover {
+.vda-player-widget__dismiss-btn:hover {
   background: rgba(239, 68, 68, 0.9);
   color: #ffffff;
   transform: scale(1.1);
 }
 
-.ida-close-btn svg {
+.vda-player-widget__dismiss-btn svg {
   width: 12px;
   height: 12px;
   fill: currentColor;
 }
 
-/* Toast notification when download starts */
-.ida-toast-notice {
+/* Toast feedback notification */
+.vda-toast-notification {
   position: fixed;
   bottom: 24px;
   right: 24px;
@@ -117,10 +124,22 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  animation: idaFadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: vdaToastFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes idaFadeInUp {
+.vda-toast-notification__status-icon {
+  font-size: 16px;
+}
+
+.vda-toast-notification--success .vda-toast-notification__status-icon {
+  color: #34d399;
+}
+
+.vda-toast-notification--error .vda-toast-notification__status-icon {
+  color: #f87171;
+}
+
+@keyframes vdaToastFadeIn {
   from {
     opacity: 0;
     transform: translateY(12px);

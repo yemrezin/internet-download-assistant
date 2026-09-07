@@ -20,7 +20,8 @@
     "default_title": "Internet Video Download Assistant"
   },
   "background": {
-    "service_worker": "background/service-worker.js"
+    "service_worker": "background/service-worker.js",
+    "type": "module"
   },
   "permissions": [
     "downloads",
@@ -39,11 +40,13 @@
         "<all_urls>"
       ],
       "js": [
-        "content/floating-widget.js",
+        "content/modules/PlayerLocator.js",
+        "content/modules/VideoOverlayPresenter.js",
+        "content/modules/DomMediaScanner.js",
         "content/content.js"
       ],
       "css": [
-        "content/floating-widget.css"
+        "content/styles/video-overlay.css"
       ],
       "all_frames": true,
       "run_at": "document_idle"
@@ -57,7 +60,7 @@
     {
       "resources": [
         "icons/*",
-        "content/floating-widget.css"
+        "content/styles/video-overlay.css"
       ],
       "matches": [
         "<all_urls>"
