@@ -100,6 +100,103 @@ export class MediaClassifier {
   }
 
   /**
+   * Checks if a URL represents a single HLS/DASH segment chunk (not a playable playlist or full video)
+   * @param {string} url
+   * @param {string} mimeType
+   * @returns {boolean}
+   */
+  static isSegmentChunk(url = '', mimeType = '') {
+    const u = (url || '').toLowerCase();
+    const mime = (mimeType || '').toLowerCase();
+
+    // Any image MIME type is either a thumbnail or disguised TS segment (e.g. image2_0.jpg)
+    if (mime.startsWith('image/')) {
+      return true;
+    }
+
+    // Common segment chunk naming patterns
+    if (
+      /image\w*_\d+\.(jpg|ts|png|m4s|jpeg|bin)/i.test(u) ||
+      /segment[-_]?\d+\.(ts|m4s|mp4|aac)/i.test(u) ||
+      /chunk[-_]?\d+\.(ts|m4s|m4a|m4v)/i.test(u) ||
+      /frag[-_]?\d+\.(ts|m4s)/i.test(u) ||
+      /seg[-_]?\d+\.(ts|m4s)/i.test(u) ||
+      /imageaud\w*_\d+/i.test(u) ||
+      /_\d+\.ts$/i.test(u) ||
+      /-\d+\.ts$/i.test(u) ||
+      /\/\d+\.ts(\?|$)/i.test(u) ||
+      /range=\d+-\d+/i.test(u) ||
+      /bytes=\d+-\d+/i.test(u)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Checks if a URL represents a master playlist that aggregates all resolution variants
+   * @param {string} url
+   * @returns {boolean}
+   */
+  static isMasterPlaylist(url = '') {
+    const u = (url || '').toLowerCase();
+    return (
+      u.includes('master.txt') ||
+      u.includes('master.m3u8') ||
+      u.includes('/master.') ||
+      u.includes('playlist.m3u8') ||
+      u.includes('index.m3u8')
+    );
+  }
+
+  /**
+   * Checks if a URL is a secondary sublist (e.g. sublist_2.txt, sublist_aud1.txt)
+   * @param {string} url
+   * @returns {boolean}
+   */
+  static isSublist(url = '') {
+    const u = (url || '').toLowerCase();
+    return (
+      u.includes('sublist_') ||
+      u.includes('variant_') ||
+      (u.includes('sublist') && u.endsWith('.txt')) ||
+      (u.includes('quality_') && u.includes('.m3u8'))
+    );
+  }
+
+  /**
+   * Estimates total HLS video size based on bandwidth and duration
+   * @param {number} bandwidthBps - Bandwidth in bits per second
+   * @param {number} durationSeconds - Duration in seconds
+   * @param {string} quality - Quality label (e.g. 1080p, 720p)
+   * @returns {string}
+   */
+  static estimateHlsSize(bandwidthBps = 0, durationSeconds = 0, quality = '') {
+    // If exact duration and bandwidth are available, calculate exact estimation
+    if (bandwidthBps > 0 && durationSeconds > 0) {
+      const totalBytes = Math.round((bandwidthBps / 8) * durationSeconds);
+      return `~${MediaClassifier.formatBytes(totalBytes)}`;
+    }
+
+    // If duration is available (e.g. 1h 45m = 6300s):
+    if (durationSeconds > 0) {
+      let bps = 2800000; // ~2.8 Mbps for 1080p Full HD
+      if (quality.includes('720')) bps = 1600000;
+      else if (quality.includes('480')) bps = 900000;
+      else if (quality.includes('4K') || quality.includes('2160')) bps = 8000000;
+      const totalBytes = Math.round((bps / 8) * durationSeconds);
+      return `~${MediaClassifier.formatBytes(totalBytes)}`;
+    }
+
+    // Realistic fallback for movie/stream
+    if (quality.includes('720')) return '~1.1 - 1.4 GB';
+    if (quality.includes('480')) return '~600 - 800 MB';
+    if (quality.includes('4K')) return '~5.5 - 8.0 GB';
+    return '~1.8 - 2.4 GB (Full HD)';
+  }
+
+  /**
    * Formats raw byte count to readable string (e.g. 14.5 MB)
    * @param {number} bytes
    * @returns {string}

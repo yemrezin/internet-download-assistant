@@ -10,36 +10,62 @@ class MediaCardRenderer {
     return div.innerHTML;
   }
 
-  static render(item, index, callbacks) {
+  static render(item, index, isSelected, callbacks) {
     const card = document.createElement('div');
-    card.className = 'media-card';
+    card.className = `media-card ${isSelected ? 'media-card--selected' : ''}`;
+    card.setAttribute('data-id', item.id);
 
     const rawUrl = (item.url || '').toLowerCase();
     const isM3u8 =
       (item.format || '').toUpperCase() === 'M3U8' ||
       rawUrl.includes('.m3u8') ||
-      rawUrl.includes('/hls/') ||
       rawUrl.includes('master.txt') ||
+      rawUrl.includes('/master.') ||
+      rawUrl.includes('playlist.txt') ||
       rawUrl.includes('sublist_');
-    const format = isM3u8 ? 'M3U8' : (item.format || 'MP4').toUpperCase();
-    const isSub = item.isSubtitle || format === 'VTT' || format === 'SRT' || format === 'TTML';
-    const isAudio = format === 'MP3' || format === 'AAC' || format === 'M4A' || format === 'SES';
+    const isSub = item.isSubtitle || item.format === 'VTT' || item.format === 'SRT' || item.format === 'TTML';
+    const isAudio = item.format === 'MP3' || item.format === 'AAC' || item.format === 'M4A' || item.format === 'SES';
 
-    const formatClass = isM3u8 ? 'm3u8' : isSub ? 'subtitle' : isAudio ? 'audio' : '';
-    const displayFormat = isSub ? 'ALTYAZI' : isAudio ? 'DUBLAJ/SES' : format;
-    const sizeText = item.sizeFormatted || (isM3u8 ? 'Akış (HLS)' : isSub ? 'Metin' : 'Bilinmiyor');
-    const qualityText = isSub
-      ? item.format || 'VTT'
-      : isAudio
-      ? item.format || 'AUDIO'
-      : item.quality || (isM3u8 ? 'Canlı / HLS' : 'HD');
-    const titleText = item.title || `Medya_${index + 1}`;
+    let formatClass = '';
+    let displayFormat = 'MP4';
+    let qualityText = item.quality || 'HD';
+    let sizeText = item.sizeFormatted || 'Bilinmiyor';
+
+    if (isSub) {
+      formatClass = 'subtitle';
+      displayFormat = 'ALTYAZI';
+      qualityText = item.format || 'VTT';
+      sizeText = item.sizeFormatted && !item.sizeFormatted.includes('GB') ? item.sizeFormatted : 'Metin';
+    } else if (isAudio) {
+      formatClass = 'audio';
+      displayFormat = 'DUBLAJ / SES';
+      qualityText = item.format || 'AUDIO';
+      sizeText = item.sizeFormatted || '~120 MB';
+    } else if (isM3u8) {
+      formatClass = 'm3u8';
+      displayFormat = 'HLS VİDEO';
+      qualityText = item.quality || '1080p FULL HD';
+      // Prevent displaying playlist text size (120 KB)
+      if (!sizeText || sizeText.includes('KB') || sizeText === 'Bilinmiyor') {
+        sizeText = '~2.1 GB (FHD)';
+      }
+    } else {
+      displayFormat = 'MP4 VİDEO';
+      qualityText = item.quality || 'Doğrudan İndirme';
+    }
+
+    const titleText = item.title || `Video_${index + 1}`;
 
     card.innerHTML = `
       <div class="card-top">
-        <div class="card-badges">
-          <span class="badge badge-format ${formatClass}">${displayFormat}</span>
-          <span class="badge badge-quality ${formatClass}">${qualityText}</span>
+        <div class="card-header-left">
+          <label class="card-checkbox-label" title="İndirmek için seç">
+            <input type="checkbox" class="card-checkbox" data-id="${item.id}" ${isSelected ? 'checked' : ''}>
+          </label>
+          <div class="card-badges">
+            <span class="badge badge-format ${formatClass}">${displayFormat}</span>
+            <span class="badge badge-quality ${formatClass}">${qualityText}</span>
+          </div>
         </div>
         <span class="card-size">${sizeText}</span>
       </div>
@@ -74,6 +100,12 @@ class MediaCardRenderer {
       </div>
     `;
 
+    // Bind checkbox change
+    const checkbox = card.querySelector('.card-checkbox');
+    checkbox.addEventListener('change', (e) => {
+      callbacks.onToggleSelect(item.id, checkbox.checked);
+    });
+
     // Event bindings
     const dlBtn = card.querySelector('.btn-download');
     dlBtn.addEventListener('click', () => callbacks.onDownload(item, dlBtn, card));
@@ -104,7 +136,10 @@ class PopupUIManager {
     this.btnRescan = document.getElementById('btnRescan');
     this.btnScanNow = document.getElementById('btnScanNow');
     this.btnOptions = document.getElementById('btnOptions');
-    this.btnDownloadAll = document.getElementById('btnDownloadAll');
+    this.btnDownloadSelected = document.getElementById('btnDownloadSelected');
+    this.btnDownloadSelectedText = document.getElementById('btnDownloadSelectedText');
+    this.chkSelectAll = document.getElementById('chkSelectAll');
+    this.lblSelectAll = document.getElementById('lblSelectAll');
 
     this.previewContainer = document.getElementById('previewContainer');
     this.previewVideo = document.getElementById('previewVideo');
@@ -113,6 +148,7 @@ class PopupUIManager {
 
     this.currentTab = null;
     this.mediaItems = [];
+    this.selectedIds = new Set();
   }
 
   async initialize() {
@@ -142,8 +178,17 @@ class PopupUIManager {
   bindEvents() {
     this.btnRescan.addEventListener('click', () => this.rescan());
     this.btnScanNow.addEventListener('click', () => this.rescan());
-    this.btnDownloadAll.addEventListener('click', () => this.downloadAll());
     this.btnClosePreview.addEventListener('click', () => this.closePreview());
+
+    if (this.btnDownloadSelected) {
+      this.btnDownloadSelected.addEventListener('click', () => this.downloadSelected());
+    }
+
+    if (this.chkSelectAll) {
+      this.chkSelectAll.addEventListener('change', (e) => {
+        this.toggleSelectAll(e.target.checked);
+      });
+    }
 
     this.btnOptions.addEventListener('click', () => {
       if (chrome.runtime.openOptionsPage) {
@@ -152,6 +197,70 @@ class PopupUIManager {
         chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html') });
       }
     });
+  }
+
+  toggleSelect(id, isSelected) {
+    if (isSelected) {
+      this.selectedIds.add(id);
+    } else {
+      this.selectedIds.delete(id);
+    }
+
+    const card = this.mediaListEl.querySelector(`.media-card[data-id="${id}"]`);
+    if (card) {
+      if (isSelected) {
+        card.classList.add('media-card--selected');
+      } else {
+        card.classList.remove('media-card--selected');
+      }
+    }
+
+    this.updateSelectionUI();
+  }
+
+  toggleSelectAll(selectAll) {
+    if (selectAll) {
+      this.mediaItems.forEach((m) => this.selectedIds.add(m.id));
+    } else {
+      this.selectedIds.clear();
+    }
+
+    const cards = this.mediaListEl.querySelectorAll('.media-card');
+    cards.forEach((card) => {
+      const id = card.getAttribute('data-id');
+      const chk = card.querySelector('.card-checkbox');
+      if (chk) chk.checked = selectAll;
+      if (selectAll) card.classList.add('media-card--selected');
+      else card.classList.remove('media-card--selected');
+    });
+
+    this.updateSelectionUI();
+  }
+
+  updateSelectionUI() {
+    const selectedCount = this.selectedIds.size;
+    const totalCount = this.mediaItems.length;
+
+    if (this.chkSelectAll) {
+      this.chkSelectAll.checked = totalCount > 0 && selectedCount === totalCount;
+      this.chkSelectAll.indeterminate = selectedCount > 0 && selectedCount < totalCount;
+    }
+
+    if (this.btnDownloadSelected) {
+      if (selectedCount > 0) {
+        this.btnDownloadSelected.disabled = false;
+        this.btnDownloadSelected.classList.remove('disabled');
+        if (this.btnDownloadSelectedText) {
+          this.btnDownloadSelectedText.textContent = `Seçilenleri İndir (${selectedCount})`;
+        }
+      } else {
+        this.btnDownloadSelected.disabled = true;
+        this.btnDownloadSelected.classList.add('disabled');
+        if (this.btnDownloadSelectedText) {
+          this.btnDownloadSelectedText.textContent = 'İndirilecek Seçin';
+        }
+      }
+    }
   }
 
   async fetchMedia() {
@@ -177,24 +286,88 @@ class PopupUIManager {
 
     if (!this.mediaItems || this.mediaItems.length === 0) {
       this.emptyStateEl.classList.remove('hidden');
-      this.mediaCountEl.textContent = '0 video';
-      this.btnDownloadAll.classList.add('hidden');
+      this.mediaCountEl.textContent = '0 video bulundu';
+      if (this.chkSelectAll) this.chkSelectAll.disabled = true;
+      if (this.btnDownloadSelected) {
+        this.btnDownloadSelected.disabled = true;
+        this.btnDownloadSelected.classList.add('disabled');
+        if (this.btnDownloadSelectedText) this.btnDownloadSelectedText.textContent = 'Seçilenleri İndir';
+      }
       return;
     }
 
     this.emptyStateEl.classList.add('hidden');
+    if (this.chkSelectAll) this.chkSelectAll.disabled = false;
     this.mediaCountEl.textContent = `${this.mediaItems.length} medya bulundu`;
-    this.btnDownloadAll.classList.remove('hidden');
+
+    // Ensure valid selections
+    const currentValidIds = new Set(this.mediaItems.map((m) => m.id));
+    for (const id of this.selectedIds) {
+      if (!currentValidIds.has(id)) this.selectedIds.delete(id);
+    }
+
+    // Default: Select all video/media items if none selected
+    if (this.selectedIds.size === 0) {
+      this.mediaItems.forEach((m) => this.selectedIds.add(m.id));
+    }
 
     this.mediaItems.forEach((item, index) => {
-      const card = MediaCardRenderer.render(item, index, {
+      const isSelected = this.selectedIds.has(item.id);
+      const card = MediaCardRenderer.render(item, index, isSelected, {
         onDownload: (m, btn, c) => this.downloadItem(m, btn, c),
         onPreview: (m) => this.playPreview(m),
         onCopy: (url, btn) => this.copyUrl(url, btn),
-        onOpenTab: (url) => chrome.tabs.create({ url })
+        onOpenTab: (url) => chrome.tabs.create({ url }),
+        onToggleSelect: (id, checked) => this.toggleSelect(id, checked)
       });
       this.mediaListEl.appendChild(card);
     });
+
+    this.updateSelectionUI();
+  }
+
+  async downloadSelected() {
+    const selectedItems = this.mediaItems.filter((m) => this.selectedIds.has(m.id));
+    if (selectedItems.length === 0) return;
+
+    this.btnDownloadSelected.disabled = true;
+    this.btnDownloadSelected.classList.add('btn-download-selected--active');
+    if (this.btnDownloadSelectedText) {
+      this.btnDownloadSelectedText.textContent = `İndiriliyor (0/${selectedItems.length})...`;
+    }
+
+    let completed = 0;
+    for (let i = 0; i < selectedItems.length; i++) {
+      const item = selectedItems[i];
+      const card = this.mediaListEl.querySelector(`.media-card[data-id="${item.id}"]`);
+      const btn = card ? card.querySelector('.btn-download') : null;
+
+      if (this.btnDownloadSelectedText) {
+        this.btnDownloadSelectedText.textContent = `İndiriliyor (${i + 1}/${selectedItems.length})...`;
+      }
+
+      try {
+        if (btn) {
+          await this.downloadItem(item, btn, card);
+          completed++;
+        }
+      } catch (err) {
+        console.error('Failed downloading item:', item, err);
+      }
+
+      await new Promise((r) => setTimeout(r, 600));
+    }
+
+    this.btnDownloadSelected.classList.remove('btn-download-selected--active');
+    this.btnDownloadSelected.classList.add('btn-download-selected--success');
+    if (this.btnDownloadSelectedText) {
+      this.btnDownloadSelectedText.textContent = `✓ Tamamlandı (${completed})`;
+    }
+
+    setTimeout(() => {
+      this.btnDownloadSelected.classList.remove('btn-download-selected--success');
+      this.updateSelectionUI();
+    }, 3500);
   }
 
   async downloadItem(item, buttonEl, cardEl) {
@@ -291,30 +464,6 @@ class PopupUIManager {
     }
   }
 
-  async downloadAll() {
-    if (this.mediaItems.length === 0) return;
-    this.btnDownloadAll.disabled = true;
-    this.btnDownloadAll.textContent = 'İndiriliyor...';
-
-    const cards = Array.from(this.mediaListEl.children);
-
-    for (let i = 0; i < this.mediaItems.length; i++) {
-      const item = this.mediaItems[i];
-      const card = cards[i];
-      const btn = card ? card.querySelector('.btn-download') : null;
-
-      if (btn) {
-        await this.downloadItem(item, btn, card);
-      }
-      await new Promise((r) => setTimeout(r, 400));
-    }
-
-    this.btnDownloadAll.textContent = 'Tümü Tamamlandı';
-    setTimeout(() => {
-      this.btnDownloadAll.disabled = false;
-      this.btnDownloadAll.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Tümünü İndir`;
-    }, 2500);
-  }
 
   playPreview(item) {
     if (!item || !item.url) return;

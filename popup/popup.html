@@ -72,12 +72,15 @@
     <!-- Footer Actions -->
     <footer class="popup-footer">
       <div class="footer-stats">
-        <span id="mediaCount">0 video</span>
+        <label class="select-all-toggle" id="lblSelectAll" title="Tümünü Seç / Seçimi Kaldır">
+          <input type="checkbox" id="chkSelectAll" class="checkbox-select-all" checked>
+          <span id="mediaCount">0 video bulundu</span>
+        </label>
       </div>
       <div class="footer-actions">
-        <button id="btnDownloadAll" class="btn-download-all hidden">
+        <button id="btnDownloadSelected" class="btn-download-selected disabled" disabled>
           <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-          Tümünü İndir
+          <span id="btnDownloadSelectedText">Seçilenleri İndir</span>
         </button>
       </div>
     </footer>

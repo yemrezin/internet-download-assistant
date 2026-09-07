@@ -266,6 +266,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: relative;
 }
 
 .media-card:hover {
@@ -274,11 +275,37 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
+.media-card.media-card--selected {
+  background: #17253d;
+  border-color: rgba(2, 132, 199, 0.7);
+  box-shadow: 0 0 12px rgba(2, 132, 199, 0.25);
+}
+
 .card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.card-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent-cyan);
+  border-radius: 4px;
 }
 
 .card-badges {
@@ -475,36 +502,82 @@ body {
   padding: 10px 16px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
+  gap: 12px;
 }
 
 .footer-stats {
+  display: flex;
+  align-items: center;
   font-size: 11px;
   color: var(--text-muted);
 }
 
-.btn-download-all {
+.select-all-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-select-all {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent-cyan);
+  border-radius: 3px;
+}
+
+.btn-download-selected {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--accent-emerald);
+  background: linear-gradient(135deg, #0284c7, #0369a1);
   color: #ffffff;
   border: none;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+  white-space: nowrap;
 }
 
-.btn-download-all:hover {
-  background: #059669;
+.btn-download-selected:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.45);
 }
 
-.btn-download-all svg {
-  width: 13px;
-  height: 13px;
+.btn-download-selected:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-download-selected.disabled,
+.btn-download-selected:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.btn-download-selected.btn-download-selected--active {
+  background: linear-gradient(135deg, #0284c7, #0891b2);
+  cursor: wait;
+}
+
+.btn-download-selected.btn-download-selected--success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.btn-download-selected svg {
+  width: 14px;
+  height: 14px;
   fill: currentColor;
+  flex-shrink: 0;
 }
 
 .hidden {
