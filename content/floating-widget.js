@@ -1,6 +1,6 @@
 /**
  * Internet Video Download Assistant - Floating Widget
- * Attaches an IDM-style "Videoyu İndir" button to HTML5 video players on the page.
+ * Attaches an IDM-style "Videoyu İndir" button cleanly to video players.
  */
 
 window.__IDA_FLOATING__ = (function () {
@@ -54,14 +54,60 @@ window.__IDA_FLOATING__ = (function () {
     return 'HD';
   }
 
+  /**
+   * Find the optimal container element (Player wrapper) for positioning the button
+   */
+  function getPlayerContainer(video) {
+    if (!video) return null;
+
+    // 1. YouTube specific logic
+    if (location.hostname.includes('youtube.com')) {
+      // Ignore thumbnails, hover previews, shorts background videos
+      if (video.closest('ytd-thumbnail, #inline-preview-player, ytd-video-preview, .ytd-video-preview, ytd-rich-grid-media')) {
+        return null;
+      }
+      // Main YouTube player element
+      const ytPlayer = video.closest('#movie_player, .html5-video-player');
+      if (ytPlayer) return ytPlayer;
+
+      // Only allow main video stream
+      if (video.classList.contains('html5-main-video') && video.parentElement) {
+        return video.parentElement;
+      }
+      return null;
+    }
+
+    // 2. Generic video player wrappers (VideoJS, JWPlayer, Plyr, DPlayer, Animecix, etc.)
+    const playerWrapper = video.closest(
+      '.video-js, .jwplayer, .plyr, .dplayer, [class*="player-container"], [class*="player-wrap"], [class*="player_container"], [id*="player-container"], [id*="player_container"], [class*="artplayer"], [class*="vjs-tech"]'
+    );
+    if (playerWrapper && playerWrapper.offsetWidth >= 200 && playerWrapper.offsetHeight >= 150) {
+      return playerWrapper;
+    }
+
+    // 3. Direct parent if appropriately sized
+    const parent = video.parentElement;
+    if (parent && parent !== document.body && parent !== document.documentElement) {
+      const pr = parent.getBoundingClientRect();
+      const vr = video.getBoundingClientRect();
+      if (pr.width >= 200 && pr.height >= 140 && pr.width >= vr.width * 0.8) {
+        return parent;
+      }
+    }
+
+    return video;
+  }
+
   function attachToVideo(video) {
     if (!isEnabled || !video) return;
     if (trackedVideos.has(video)) return;
 
+    const targetContainer = getPlayerContainer(video);
+    if (!targetContainer) return; // Ignore preview or invalid videos
+
     // Check size - don't attach to tiny hidden video players or background sounds
     const rect = video.getBoundingClientRect();
     if (rect.width < 180 || rect.height < 120) {
-      // Re-check when video plays or metadata loads
       const onMeta = () => {
         video.removeEventListener('loadedmetadata', onMeta);
         attachToVideo(video);
@@ -90,33 +136,96 @@ window.__IDA_FLOATING__ = (function () {
       </div>
     `;
 
-    document.body.appendChild(container);
-    trackedVideos.set(video, container);
+    // Mounting strategy:
+    // When targetContainer is an element that can hold child nodes (e.g. #movie_player or a div wrapper)
+    const canAppendInside = targetContainer !== video && targetContainer.nodeType === Node.ELEMENT_NODE;
 
-    function updatePosition() {
-      if (!video.isConnected) {
-        container.remove();
-        return;
+    if (canAppendInside) {
+      // Ensure targetContainer is a positioning context
+      const compPos = window.getComputedStyle(targetContainer).position;
+      if (compPos === 'static') {
+        targetContainer.style.position = 'relative';
       }
-      const r = video.getBoundingClientRect();
-      // Only show if video is visible on screen
-      if (r.width < 100 || r.height < 80 || r.bottom < 0 || r.top > window.innerHeight) {
-        container.style.display = 'none';
-        return;
+      targetContainer.appendChild(container);
+      container.classList.add('ida-attached-to-player');
+    } else {
+      // Fallback: append to document.body and manage coordinates strictly
+      document.body.appendChild(container);
+
+      function updatePosition() {
+        if (!video.isConnected) {
+          container.remove();
+          return;
+        }
+        const r = targetContainer.getBoundingClientRect();
+        if (r.width < 140 || r.height < 90 || r.bottom <= 0 || r.top >= window.innerHeight) {
+          container.style.display = 'none';
+          return;
+        }
+        container.style.display = 'block';
+
+        let top = window.scrollY + r.top + 14;
+
+        // Prevent overlapping fixed headers / mastheads
+        const masthead = document.querySelector('#masthead-container, #masthead, ytd-masthead, header.fixed');
+        if (masthead) {
+          const mRect = masthead.getBoundingClientRect();
+          if (mRect.bottom > 0 && r.top < mRect.bottom) {
+            top = window.scrollY + mRect.bottom + 10;
+          }
+        }
+
+        const left = window.scrollX + r.right - container.offsetWidth - 16;
+        container.style.top = `${Math.max(10, top)}px`;
+        container.style.left = `${Math.max(10, Math.min(left, window.innerWidth - container.offsetWidth - 14))}px`;
       }
-      container.style.display = 'block';
-      const top = window.scrollY + r.top + 12;
-      const left = window.scrollX + r.right - container.offsetWidth - 14;
-      container.style.top = `${Math.max(0, top)}px`;
-      container.style.left = `${Math.max(0, left)}px`;
+
+      updatePosition();
+      window.addEventListener('scroll', updatePosition, { passive: true });
+      window.addEventListener('resize', updatePosition, { passive: true });
     }
 
-    // Initial position
-    updatePosition();
+    trackedVideos.set(video, container);
 
-    // Position updates on scroll / resize / animation frame
-    window.addEventListener('scroll', updatePosition, { passive: true });
-    window.addEventListener('resize', updatePosition, { passive: true });
+    // Draggable support so user can move it anywhere on the player if needed
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let initLeft = 0;
+    let initTop = 0;
+
+    container.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.ida-close-btn')) return;
+      isDragging = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+
+      const rect = container.getBoundingClientRect();
+      const parentRect = canAppendInside ? targetContainer.getBoundingClientRect() : { left: 0, top: 0 };
+      initLeft = rect.left - parentRect.left;
+      initTop = rect.top - parentRect.top;
+
+      function onMouseMove(moveEvent) {
+        const dx = moveEvent.clientX - dragStartX;
+        const dy = moveEvent.clientY - dragStartY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          isDragging = true;
+          container.classList.remove('ida-attached-to-player');
+          container.style.left = `${initLeft + dx}px`;
+          container.style.top = `${initTop + dy}px`;
+          container.style.right = 'auto';
+          container.style.bottom = 'auto';
+        }
+      }
+
+      function onMouseUp() {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      }
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
 
     // Handle close button
     const closeBtn = container.querySelector('.ida-close-btn');
@@ -128,16 +237,20 @@ window.__IDA_FLOATING__ = (function () {
     // Handle download button click
     const btn = container.querySelector('.ida-floating-btn');
     btn.addEventListener('click', async (e) => {
+      if (isDragging) {
+        isDragging = false;
+        return;
+      }
       e.stopPropagation();
+
       const mediaSrc = video.currentSrc || video.src || '';
       const docTitle = document.title ? document.title.split(' - ')[0].trim() : 'Video';
+      const effectiveUrl = mediaSrc || (video.querySelector('source') ? video.querySelector('source').src : '');
 
-      if (!mediaSrc && !video.querySelector('source')) {
+      if (!effectiveUrl) {
         showToast('Video bağlantısı henüz yüklenmedi, lütfen oynatın.', false);
         return;
       }
-
-      const effectiveUrl = mediaSrc || (video.querySelector('source') ? video.querySelector('source').src : '');
 
       chrome.runtime.sendMessage(
         {
@@ -160,13 +273,15 @@ window.__IDA_FLOATING__ = (function () {
       );
     });
 
-    // Video metadata update
-    video.addEventListener('loadedmetadata', () => {
+    // Update quality badge on metadata or playback
+    const updateQuality = () => {
       const q = getQualityLabel(video);
       const b = container.querySelector('.ida-badge-quality');
       if (b) b.textContent = q;
-      updatePosition();
-    });
+    };
+
+    video.addEventListener('loadedmetadata', updateQuality);
+    video.addEventListener('play', updateQuality);
   }
 
   return {
